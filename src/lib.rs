@@ -1,3 +1,5 @@
+mod json_tag;
+
 #[cfg(test)]
 mod tests {
     #[test]
