@@ -1,4 +1,5 @@
 mod json_tag;
+mod peekable_codepoints;
 
 #[cfg(test)]
 mod tests {
