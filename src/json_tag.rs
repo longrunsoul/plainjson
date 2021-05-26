@@ -2,16 +2,10 @@ use std::io::{
     Read,
 };
 use anyhow::{
-    Error,
     Result,
 };
-use unicode_reader::CodePoints;
 
-pub enum QuoteType {
-    None,
-    Single,
-    Double,
-}
+use crate::peekable_codepoints::*;
 
 pub enum JsonTag {
     LeftCurly,
@@ -20,49 +14,93 @@ pub enum JsonTag {
     RightSquare,
     Colon,
     Comma,
-    Literal(String, QuoteType),
-    Number(String),
+    Literal(String),
 }
 
 impl JsonTag {
-    pub fn read_json_tag<I>(char_iter: &mut I, buffer: &mut Vec<char>) -> Result<Option<JsonTag>>
-        where I: Iterator<Item=Result<char, std::io::Error>>
-    {
-        //TODO: IMPLEMENT BUFFERED ITERATOR OF CHAR WITH SUPPORT OF PEEK
-        let json_tag = loop {
-            match char_iter.next() {
-                None => break Ok(None),
-
-                Some(Ok(c)) => {
-                    match c {
-                        c if c.is_whitespace() => continue,
-                        '{' => break Ok(Some(JsonTag::LeftCurly)),
-                        '}' => break Ok(Some(JsonTag::RightCurly)),
-                        '[' => break Ok(Some(JsonTag::LeftSquare)),
-                        ']' => break Ok(Some(JsonTag::RightSquare)),
-                        ',' => break Ok(Some(JsonTag::Comma)),
-                        ':' => break Ok(Some(JsonTag::Colon)),
-                        _ => {
-                            buffer.push(c);
-                            continue;
-                        },
-                    }
-                },
-
-                Some(Err(e)) => break Err(Error::new(e)),
-            }
-        };
-
-        todo!()
-    }
-
-    pub fn parse<R>(reader: R) -> Vec<JsonTag>
+    pub fn read_json_tag<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<JsonTag>>
         where R: Read
     {
-        let mut buffer = Vec::new();
-        let mut codepoints = CodePoints::from(reader);
-        let json_tag = JsonTag::read_json_tag(&mut codepoints, &mut buffer);
+        let json_tag =
+            loop {
+                match peekable_cp.peek_char(0)? {
+                    None => break None,
+                    Some(c) => {
+                        match c {
+                            c if c.is_whitespace() => {
+                                peekable_cp.skip(1)?;
+                                continue;
+                            }
+                            '{' => break Some(JsonTag::LeftCurly),
+                            '}' => break Some(JsonTag::RightCurly),
+                            '[' => break Some(JsonTag::LeftSquare),
+                            ']' => break Some(JsonTag::RightSquare),
+                            ',' => break Some(JsonTag::Comma),
+                            ':' => break Some(JsonTag::Colon),
+                            _ => {
+                                let mut end = 0;
+                                let mut is_escape = false;
+                                loop {
+                                    match peekable_cp.peek_char(end)? {
+                                        None => break,
+                                        Some(c) => {
+                                            match c {
+                                                '\\' => {
+                                                    end += 1;
+                                                    is_escape = true;
+                                                    continue;
+                                                }
+                                                '{' | '}' | '[' | ']' | ',' | ':' => {
+                                                    if !is_escape {
+                                                        break;
+                                                    }
+                                                }
+                                                _ => ()
+                                            }
+                                        }
+                                    }
 
-        todo!()
+                                    is_escape = false;
+                                    end += 1;
+                                }
+
+                                let literal = peekable_cp.pop(end)?;
+                                break Some(JsonTag::Literal(literal));
+                            }
+                        }
+                    }
+                }
+            };
+
+        match json_tag {
+            Some(JsonTag::LeftCurly)
+            | Some(JsonTag::RightCurly)
+            | Some(JsonTag::LeftSquare)
+            | Some(JsonTag::RightSquare)
+            | Some(JsonTag::Comma)
+            | Some(JsonTag::Colon)
+                => peekable_cp.skip(1)?,
+
+            _ => (),
+        }
+
+        Ok(json_tag)
+    }
+
+    pub fn parse<R>(reader: R) -> Result<Vec<JsonTag>>
+        where R: Read
+    {
+        let mut json_tag_list = Vec::new();
+        let mut peekable_cp = PeekableCodePoints::new(reader);
+        loop{
+            let json_tag = JsonTag::read_json_tag(&mut peekable_cp)?;
+            if json_tag.is_none() {
+                break;
+            }
+
+            json_tag_list.push(json_tag.unwrap());
+        }
+
+        Ok(json_tag_list)
     }
 }

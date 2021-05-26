@@ -52,7 +52,7 @@ impl<R: Read> PeekableCodePoints<R> {
         Ok(combined_str)
     }
 
-    pub fn discard_buffer(&mut self, count: usize) {
+    fn discard_buffer(&mut self, count: usize) {
         let actual_count =
             if count > self.buffer.len() {
                 self.buffer.len()
@@ -80,5 +80,16 @@ impl<R: Read> PeekableCodePoints<R> {
         }
 
         Ok(Some(self.buffer[index]))
+    }
+
+    pub fn skip(&mut self, count: usize) -> Result<()> {
+        let feed_count = count - self.buffer.len();
+        if feed_count > 0 {
+            self.feed_buffer(feed_count)?;
+        }
+
+        self.discard_buffer(count);
+
+        Ok(())
     }
 }
