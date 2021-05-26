@@ -69,4 +69,16 @@ impl<R: Read> PeekableCodePoints<R> {
 
         Ok(pop_str)
     }
+
+    pub fn peek_char(&mut self, index: usize) -> Result<Option<char>> {
+        if index >= self.buffer.len() {
+            self.feed_buffer(index + 1 - self.buffer.len())?;
+        }
+
+        if self.buffer.len() <= index {
+            return Ok(None);
+        }
+
+        Ok(Some(self.buffer[index]))
+    }
 }
