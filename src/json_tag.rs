@@ -39,6 +39,7 @@ impl JsonTag {
                             ':' => break Some(JsonTag::Colon),
                             _ => {
                                 let mut end = 0;
+                                let mut quote = None;
                                 let mut is_escape = false;
                                 loop {
                                     match peekable_cp.peek_char(end)? {
@@ -46,16 +47,33 @@ impl JsonTag {
                                         Some(c) => {
                                             match c {
                                                 '\\' => {
-                                                    end += 1;
                                                     is_escape = true;
+
+                                                    end += 1;
                                                     continue;
                                                 }
-                                                '{' | '}' | '[' | ']' | ',' | ':' => {
-                                                    if !is_escape {
-                                                        break;
+
+                                                '\'' | '"' if !is_escape => {
+                                                    match quote {
+                                                        None => quote = Some(c),
+                                                        Some(q) if q == c => quote = None,
+                                                        _ => (),
                                                     }
+
+                                                    end += 1;
+                                                    continue;
                                                 }
-                                                _ => ()
+
+                                                '\r' | '\n' if !quote.is_none() => {
+                                                    quote = None;
+                                                    break;
+                                                }
+
+                                                c if c.is_whitespace() && quote.is_none() => break,
+
+                                                '{' | '}' | '[' | ']' | ',' | ':' if !is_escape && quote.is_none() => break,
+
+                                                _ => (),
                                             }
                                         }
                                     }
@@ -79,7 +97,7 @@ impl JsonTag {
             | Some(JsonTag::RightSquare)
             | Some(JsonTag::Comma)
             | Some(JsonTag::Colon)
-                => peekable_cp.skip(1)?,
+            => peekable_cp.skip(1)?,
 
             _ => (),
         }
@@ -92,7 +110,7 @@ impl JsonTag {
     {
         let mut json_tag_list = Vec::new();
         let mut peekable_cp = PeekableCodePoints::new(reader);
-        loop{
+        loop {
             let json_tag = JsonTag::read_json_tag(&mut peekable_cp)?;
             if json_tag.is_none() {
                 break;
