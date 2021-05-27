@@ -38,18 +38,14 @@ impl<R: Read> PeekableCodePoints<R> {
     }
 
     pub fn peek(&mut self, count: usize) -> Result<String> {
-        let feed_count = count - self.buffer.len();
-        let actual_feed_count =
-            if feed_count > 0 {
-                self.feed_buffer(feed_count)?
-            } else {
-                0
-            };
-
-        let actual_count = count - (feed_count - actual_feed_count);
-        let combined_str = self.buffer[..actual_count].iter().collect();
-
-        Ok(combined_str)
+        if count <= self.buffer.len() {
+            let combined_str = self.buffer[..count].iter().collect();
+            Ok(combined_str)
+        } else {
+            self.feed_buffer(count - self.buffer.len())?;
+            let combined_str = self.buffer.iter().collect();
+            Ok(combined_str)
+        }
     }
 
     fn discard_buffer(&mut self, count: usize) {
