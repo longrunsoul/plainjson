@@ -7,6 +7,7 @@ use anyhow::{
 
 use crate::peekable_codepoints::*;
 
+#[derive(Debug, Eq, PartialEq)]
 pub enum JsonTag {
     LeftCurly,
     RightCurly,
@@ -120,5 +121,50 @@ impl JsonTag {
         }
 
         Ok(json_tag_list)
+    }
+}
+
+#[cfg(test)]
+mod json_tag_tests {
+    use super::*;
+
+    #[test]
+    fn test_simple_one_line() -> Result<()> {
+        let json = r#"{"simple": 123, "array": ["a", "b", "c"], "object": {"prop": "true"}}"#;
+        let json_tag_list = JsonTag::parse(json.as_bytes())?;
+        assert_eq!(
+            json_tag_list,
+            vec![
+                // {
+                JsonTag::LeftCurly,
+
+                // "simple": 123
+                JsonTag::Literal(String::from(r#""simple""#)), JsonTag::Colon, JsonTag::Literal(String::from(r#"123"#)),
+
+                // ,
+                JsonTag::Comma,
+
+                // "array": ["a", "b", "c"]
+                JsonTag::Literal(String::from(r#""array""#)),
+                JsonTag::Colon,
+                JsonTag::LeftSquare,
+                JsonTag::Literal(String::from(r#""a""#)), JsonTag::Comma, JsonTag::Literal(String::from(r#""b""#)), JsonTag::Comma, JsonTag::Literal(String::from(r#""c""#)),
+                JsonTag::RightSquare,
+
+                // ,
+                JsonTag::Comma,
+
+                // "object": {"prop": "true"}
+                JsonTag::Literal(String::from(r#""object""#)),
+                JsonTag::Colon,
+                JsonTag::LeftCurly,
+                JsonTag::Literal(String::from(r#""prop""#)), JsonTag::Colon, JsonTag::Literal(String::from(r#""true""#)),
+                JsonTag::RightCurly,
+
+                // }
+                JsonTag::RightCurly,
+            ]
+        );
+        Ok(())
     }
 }
