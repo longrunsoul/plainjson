@@ -79,9 +79,8 @@ impl<R: Read> PeekableCodePoints<R> {
     }
 
     pub fn skip(&mut self, count: usize) -> Result<()> {
-        let feed_count = count - self.buffer.len();
-        if feed_count > 0 {
-            self.feed_buffer(feed_count)?;
+        if count > self.buffer.len() {
+            self.feed_buffer(count - self.buffer.len())?;
         }
 
         self.discard_buffer(count);
