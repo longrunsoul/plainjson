@@ -42,6 +42,7 @@ impl JsonTag {
                                 let mut end = 0;
                                 let mut quote = None;
                                 let mut is_escape = false;
+                                let mut quote_as_literal = false;
                                 loop {
                                     match peekable_cp.peek_char(end)? {
                                         None => break,
@@ -54,7 +55,7 @@ impl JsonTag {
                                                     continue;
                                                 }
 
-                                                '\'' | '"' if !is_escape => {
+                                                '\'' | '"' if !is_escape && !quote_as_literal => {
                                                     match quote {
                                                         None => quote = Some(c),
                                                         Some(q) if q == c => quote = None,
@@ -66,8 +67,13 @@ impl JsonTag {
                                                 }
 
                                                 '\r' | '\n' if !quote.is_none() => {
+                                                    quote_as_literal = true;
+
                                                     quote = None;
-                                                    break;
+                                                    is_escape = false;
+
+                                                    end = 0;
+                                                    continue;
                                                 }
 
                                                 c if c.is_whitespace() && quote.is_none() => break,
@@ -129,8 +135,8 @@ mod json_tag_tests {
     use super::*;
 
     #[test]
-    fn test_simple_one_line() -> Result<()> {
-        let json = r#"{"simple": 123, "array": ["a", "b", "c"], "object": {"prop": "true"}}"#;
+    fn test_one_line() -> Result<()> {
+        let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]"}}"#;
         let json_tag_list = JsonTag::parse(json.as_bytes())?;
         assert_eq!(
             json_tag_list,
@@ -144,21 +150,126 @@ mod json_tag_tests {
                 // ,
                 JsonTag::Comma,
 
-                // "array": ["a", "b", "c"]
+                // "array": ["a", "b", "c\""]
                 JsonTag::Literal(String::from(r#""array""#)),
                 JsonTag::Colon,
                 JsonTag::LeftSquare,
-                JsonTag::Literal(String::from(r#""a""#)), JsonTag::Comma, JsonTag::Literal(String::from(r#""b""#)), JsonTag::Comma, JsonTag::Literal(String::from(r#""c""#)),
+                JsonTag::Literal(String::from(r#""a""#)), JsonTag::Comma, JsonTag::Literal(String::from(r#""b""#)), JsonTag::Comma, JsonTag::Literal(String::from(r#""c\"""#)),
                 JsonTag::RightSquare,
 
                 // ,
                 JsonTag::Comma,
 
-                // "object": {"prop": "true"}
+                // "object": {"prop": "{true]"}
                 JsonTag::Literal(String::from(r#""object""#)),
                 JsonTag::Colon,
                 JsonTag::LeftCurly,
-                JsonTag::Literal(String::from(r#""prop""#)), JsonTag::Colon, JsonTag::Literal(String::from(r#""true""#)),
+                JsonTag::Literal(String::from(r#""prop""#)), JsonTag::Colon, JsonTag::Literal(String::from(r#""{true]""#)),
+                JsonTag::RightCurly,
+
+                // }
+                JsonTag::RightCurly,
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_multi_line() -> Result<()> {
+        let json = r#"
+{
+    "simple": 123,
+    "array": [
+        "a",
+        "b",
+        "c\""
+    ],
+    "object": {
+        "prop": "{true]"
+    }
+}"#;
+        let json_tag_list = JsonTag::parse(json.as_bytes())?;
+        assert_eq!(
+            json_tag_list,
+            vec![
+                // {
+                JsonTag::LeftCurly,
+
+                // "simple": 123
+                JsonTag::Literal(String::from(r#""simple""#)), JsonTag::Colon, JsonTag::Literal(String::from(r#"123"#)),
+
+                // ,
+                JsonTag::Comma,
+
+                // "array": ["a", "b", "c\""]
+                JsonTag::Literal(String::from(r#""array""#)),
+                JsonTag::Colon,
+                JsonTag::LeftSquare,
+                JsonTag::Literal(String::from(r#""a""#)), JsonTag::Comma, JsonTag::Literal(String::from(r#""b""#)), JsonTag::Comma, JsonTag::Literal(String::from(r#""c\"""#)),
+                JsonTag::RightSquare,
+
+                // ,
+                JsonTag::Comma,
+
+                // "object": {"prop": "{true]"}
+                JsonTag::Literal(String::from(r#""object""#)),
+                JsonTag::Colon,
+                JsonTag::LeftCurly,
+                JsonTag::Literal(String::from(r#""prop""#)), JsonTag::Colon, JsonTag::Literal(String::from(r#""{true]""#)),
+                JsonTag::RightCurly,
+
+                // }
+                JsonTag::RightCurly,
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_multi_line_malformed() -> Result<()> {
+        let json = r#"
+{
+    "simple": 123,
+    "array": [
+        "a",
+        "b",
+        "c\""
+    ],
+    "obj
+    ect": {
+        "prop": "{true]"
+    }
+}"#;
+        let json_tag_list = JsonTag::parse(json.as_bytes())?;
+        assert_eq!(
+            json_tag_list,
+            vec![
+                // {
+                JsonTag::LeftCurly,
+
+                // "simple": 123
+                JsonTag::Literal(String::from(r#""simple""#)), JsonTag::Colon, JsonTag::Literal(String::from(r#"123"#)),
+
+                // ,
+                JsonTag::Comma,
+
+                // "array": ["a", "b", "c\""]
+                JsonTag::Literal(String::from(r#""array""#)),
+                JsonTag::Colon,
+                JsonTag::LeftSquare,
+                JsonTag::Literal(String::from(r#""a""#)), JsonTag::Comma, JsonTag::Literal(String::from(r#""b""#)), JsonTag::Comma, JsonTag::Literal(String::from(r#""c\"""#)),
+                JsonTag::RightSquare,
+
+                // ,
+                JsonTag::Comma,
+
+                // "obj
+                // ect": {"prop": "{true]"}
+                JsonTag::Literal(String::from(r#""obj"#)),
+                JsonTag::Literal(String::from(r#"ect""#)),
+                JsonTag::Colon,
+                JsonTag::LeftCurly,
+                JsonTag::Literal(String::from(r#""prop""#)), JsonTag::Colon, JsonTag::Literal(String::from(r#""{true]""#)),
                 JsonTag::RightCurly,
 
                 // }
