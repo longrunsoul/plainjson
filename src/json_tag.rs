@@ -19,6 +19,23 @@ pub enum JsonTag {
 }
 
 impl JsonTag {
+    pub fn to_string(json_tags: &[JsonTag]) -> String {
+        let mut result = String::new();
+        for i in 0..json_tags.len() {
+            match &json_tags[i] {
+                JsonTag::LeftCurly => result.push('{'),
+                JsonTag::RightCurly => result.push('}'),
+                JsonTag::LeftSquare => result.push('['),
+                JsonTag::RightSquare => result.push(']'),
+                JsonTag::Comma => result.push_str(", "),
+                JsonTag::Colon => result.push_str(": "),
+                JsonTag::Literal(s) => result.push_str(s),
+            }
+        }
+
+        result
+    }
+
     pub fn read_json_tag<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<JsonTag>>
         where R: Read
     {
