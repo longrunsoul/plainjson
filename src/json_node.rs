@@ -87,8 +87,28 @@ impl JsonNode {
         Ok(i)
     }
 
-    fn parse_plain(plain_literal: &str) -> JsonNode {
-        todo!()
+    fn parse_plain(literal: &str) -> JsonNode {
+        match literal {
+            str if str.chars().all(|c| c.is_numeric() || c == '.')
+                && str.chars().filter(|c| *c == '.').count() <= 1
+            => JsonNode::PlainNumber(String::from(str)),
+
+            "true" | "True" | "TRUE" => JsonNode::PlainBoolean(true),
+            "false" | "False" | "FALSE" => JsonNode::PlainBoolean(false),
+
+            "null" | "Null" | "NULL" => JsonNode::PlainNull,
+
+            _ => {
+                if (
+                    (literal.chars().nth(0) == Some('\'') && literal.chars().last() == Some('\''))
+                        || (literal.chars().nth(0) == Some('"') && literal.chars().last() == Some('"'))
+                ) && literal.len() > 1 {
+                    JsonNode::PlainString(String::from(&literal[1..literal.len() - 1]))
+                } else {
+                    JsonNode::PlainString(String::from(literal))
+                }
+            }
+        }
     }
 
     fn parse_array(json_tags: &[JsonTag]) -> JsonNode {
