@@ -69,13 +69,13 @@ impl JsonNode {
 
     fn find_match_tag(json_tags: &[JsonTag], start: usize, left_pair_tag: JsonTag, right_pair_tag: JsonTag) -> Result<usize> {
         let mut i = start;
-        let mut unmatch = 0;
+        let mut mismatch = 0;
         while i < json_tags.len()
-            && !(json_tags[i] == right_pair_tag && 0 == unmatch) {
+            && !(json_tags[i] == right_pair_tag && 0 == mismatch) {
             if json_tags[i] == left_pair_tag {
-                unmatch += 1;
+                mismatch += 1;
             } else if json_tags[i] == right_pair_tag {
-                unmatch -= 1;
+                mismatch -= 1;
             }
 
             i += 1;
