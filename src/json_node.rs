@@ -173,7 +173,7 @@ impl JsonNode {
     fn parse_object(json_tags: &[JsonTag]) -> Result<JsonNode> {
         let inner_tags =
             if json_tags.first() == Some(&JsonTag::LeftCurly) && json_tags.last() == Some(&JsonTag::RightCurly) {
-                &json_tags[1..=json_tags.len() - 1]
+                &json_tags[1..json_tags.len() - 1]
             } else {
                 json_tags
             };
@@ -193,7 +193,12 @@ impl JsonNode {
                     bail!("object property name must be string: {}", JsonTag::to_string(&inner_tags[i..]))
                 };
 
+            // skip colon symbol
             let mut start = i + 1;
+            if let JsonTag::Colon = inner_tags[start] {
+                start += 1;
+            }
+
             let mut value_node = None;
             while start < inner_tags.len() {
                 value_node = JsonNode::parse_next(inner_tags, &mut start)?;
@@ -210,6 +215,13 @@ impl JsonNode {
 
             let obj_prop = JsonObjProp::new(String::from(prop_name), value_node.unwrap());
             prop_list.push(obj_prop);
+
+            // skip comma symbol
+            if i < inner_tags.len() {
+                if let JsonTag::Comma = inner_tags[i] {
+                    i += 1;
+                }
+            }
         }
 
         Ok(JsonNode::Object(prop_list))
@@ -230,22 +242,22 @@ mod json_node_tests {
             vec![
                 JsonNode::Object(
                     vec![
-                        JsonObjProp::new(String::from("simple"), JsonNode::PlainNumber(String::from("123"))),
+                        JsonObjProp::new(String::from(r#"simple"#), JsonNode::PlainNumber(String::from(r#"123"#))),
                         JsonObjProp::new(
-                            String::from("array"),
+                            String::from(r#"array"#),
                             JsonNode::Array(
                                 vec![
-                                    JsonNode::PlainString(String::from("a")),
-                                    JsonNode::PlainString(String::from("b")),
-                                    JsonNode::PlainString(String::from("c\"")),
+                                    JsonNode::PlainString(String::from(r#"a"#)),
+                                    JsonNode::PlainString(String::from(r#"b"#)),
+                                    JsonNode::PlainString(String::from(r#"c\""#)),
                                 ]
                             ),
                         ),
                         JsonObjProp::new(
-                            String::from("object"),
+                            String::from(r#"object"#),
                             JsonNode::Object(
                                 vec![
-                                    JsonObjProp::new(String::from("prop"), JsonNode::PlainString(String::from("{true]"))),
+                                    JsonObjProp::new(String::from(r#"prop"#), JsonNode::PlainString(String::from(r#"{true]"#))),
                                 ]
                             ),
                         )
