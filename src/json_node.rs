@@ -10,6 +10,15 @@ pub struct JsonObjProp {
     pub value: JsonNode,
 }
 
+impl JsonObjProp {
+    pub fn new(name: String, value: JsonNode) -> Self {
+        JsonObjProp {
+            name,
+            value,
+        }
+    }
+}
+
 pub enum JsonNode {
     PlainNull,
     PlainString(String),
@@ -33,16 +42,6 @@ impl JsonNode {
                     continue;
                 }
 
-                JsonTag::LeftCurly => {
-                    let right_curly_i = JsonNode::find_match_tag(json_tags, i, JsonTag::LeftCurly, JsonTag::RightCurly)?;
-
-                    let object_node = JsonNode::parse_object(&json_tags[i..=right_curly_i]);
-                    json_nodes.push(object_node);
-
-                    i = right_curly_i + 1;
-                    continue;
-                }
-
                 JsonTag::LeftSquare => {
                     let right_square_i = JsonNode::find_match_tag(json_tags, i, JsonTag::LeftSquare, JsonTag::RightSquare)?;
 
@@ -50,6 +49,16 @@ impl JsonNode {
                     json_nodes.push(array_node);
 
                     i = right_square_i + 1;
+                    continue;
+                }
+
+                JsonTag::LeftCurly => {
+                    let right_curly_i = JsonNode::find_match_tag(json_tags, i, JsonTag::LeftCurly, JsonTag::RightCurly)?;
+
+                    let object_node = JsonNode::parse_object(&json_tags[i..=right_curly_i])?;
+                    json_nodes.push(object_node);
+
+                    i = right_curly_i + 1;
                     continue;
                 }
 
@@ -107,6 +116,35 @@ impl JsonNode {
         }
     }
 
+    fn parse_next(json_tags: &[JsonTag], start: &mut usize) -> Result<Option<JsonNode>> {
+        let i = *start;
+        let node = match &json_tags[i] {
+            JsonTag::Literal(_) => {
+                *start += 1;
+                JsonNode::parse(&json_tags[i..=i])?.into_iter().next()
+            }
+            JsonTag::LeftSquare => {
+                let right_square_i = JsonNode::find_match_tag(json_tags, i, JsonTag::LeftSquare, JsonTag::RightSquare)?;
+
+                *start = right_square_i + 1;
+                JsonNode::parse(&json_tags[i..=right_square_i])?.into_iter().next()
+            }
+            JsonTag::LeftCurly => {
+                let right_curly_i = JsonNode::find_match_tag(json_tags, i, JsonTag::LeftCurly, JsonTag::RightCurly)?;
+
+                *start = right_curly_i + 1;
+                JsonNode::parse(&json_tags[i..=right_curly_i])?.into_iter().next()
+            }
+
+            _ => {
+                *start += 1;
+                None
+            }
+        };
+
+        Ok(node)
+    }
+
     fn parse_array(json_tags: &[JsonTag]) -> Result<JsonNode> {
         let inner_tags =
             if json_tags.first() == Some(&JsonTag::LeftSquare) && json_tags.last() == Some(&JsonTag::RightSquare) {
@@ -118,38 +156,60 @@ impl JsonNode {
         let mut i = 0;
         let mut inner_nodes = Vec::new();
         while i < inner_tags.len() {
-            let mut nodes = match &inner_tags[i] {
-                JsonTag::Literal(_) => {
-                    i += 1;
-                    JsonNode::parse(&inner_tags[i..=i])?
-                }
-                JsonTag::LeftSquare => {
-                    let right_square_i = JsonNode::find_match_tag(inner_tags, i, JsonTag::LeftSquare, JsonTag::RightSquare)?;
+            let node = JsonNode::parse_next(inner_tags, &mut i)?;
+            if node.is_none() {
+                continue;
+            }
 
-                    i = right_square_i + 1;
-                    JsonNode::parse(&inner_tags[i..=right_square_i])?
-                }
-                JsonTag::LeftCurly => {
-                    let right_curly_i = JsonNode::find_match_tag(inner_tags, i, JsonTag::LeftCurly, JsonTag::RightCurly)?;
-
-                    i = right_curly_i + 1;
-                    JsonNode::parse(&inner_tags[i..=right_curly_i])?
-                }
-
-                _ => {
-                    i += 1;
-                    continue;
-                }
-            };
-
-            inner_nodes.append(&mut nodes);
+            inner_nodes.push(node.unwrap());
         }
 
         let array_node = JsonNode::Array(inner_nodes);
         Ok(array_node)
     }
 
-    fn parse_object(json_tags: &[JsonTag]) -> JsonNode {
-        todo!()
+    fn parse_object(json_tags: &[JsonTag]) -> Result<JsonNode> {
+        let inner_tags =
+            if json_tags.first() == Some(&JsonTag::LeftCurly) && json_tags.last() == Some(&JsonTag::RightCurly) {
+                &json_tags[1..=json_tags.len() - 1]
+            } else {
+                json_tags
+            };
+
+        let mut i = 0;
+        let mut prop_list = Vec::new();
+        while i < inner_tags.len() {
+            let prop_name =
+                if let JsonTag::Literal(str) = &inner_tags[i] {
+                    if (str.chars().nth(0) == Some('\'') && str.chars().last() == Some('\''))
+                        || (str.chars().nth(0) == Some('"') && str.chars().last() == Some('"')) {
+                        &str[1..str.len() - 1]
+                    } else {
+                        str
+                    }
+                } else {
+                    bail!("object property name must be string: {}", JsonTag::to_string(&inner_tags[i..]))
+                };
+
+            let mut start = i + 1;
+            let mut value_node = None;
+            while start < inner_tags.len() {
+                value_node = JsonNode::parse_next(inner_tags, &mut start)?;
+                if value_node.is_none() {
+                    continue;
+                }
+
+                i = start;
+                break;
+            };
+            if value_node.is_none() {
+                bail!("object property value not found: {}", JsonTag::to_string(&inner_tags[i..start]));
+            }
+
+            let obj_prop = JsonObjProp::new(String::from(prop_name), value_node.unwrap());
+            prop_list.push(obj_prop);
+        }
+
+        Ok(JsonNode::Object(prop_list))
     }
 }
