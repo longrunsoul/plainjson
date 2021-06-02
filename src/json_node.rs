@@ -23,11 +23,7 @@ impl JsonNode {
     pub fn parse(json_tags: &[JsonTag]) -> Result<Vec<JsonNode>> {
         let mut i = 0;
         let mut json_nodes = Vec::new();
-        loop {
-            if i >= json_tags.len() {
-                break;
-            }
-
+        while i < json_tags.len() {
             match &json_tags[i] {
                 JsonTag::Literal(literal) => {
                     let plain_node = JsonNode::parse_plain(literal);
@@ -121,11 +117,7 @@ impl JsonNode {
 
         let mut i = 0;
         let mut inner_nodes = Vec::new();
-        loop {
-            if i >= inner_nodes.len() {
-                break;
-            }
-
+        while i < inner_tags.len() {
             let mut nodes = match &inner_tags[i] {
                 JsonTag::Literal(_) => {
                     i += 1;
