@@ -5,6 +5,7 @@ use anyhow::{
 
 use crate::json_tag::*;
 
+#[derive(Debug, Eq, PartialEq)]
 pub struct JsonObjProp {
     pub name: String,
     pub value: JsonNode,
@@ -19,6 +20,7 @@ impl JsonObjProp {
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
 pub enum JsonNode {
     PlainNull,
     PlainString(String),
@@ -73,7 +75,7 @@ impl JsonNode {
     }
 
     fn find_match_tag(json_tags: &[JsonTag], start: usize, left_pair_tag: JsonTag, right_pair_tag: JsonTag) -> Result<usize> {
-        let mut i = start;
+        let mut i = start + 1;
         let mut mismatch = 0;
         while i < json_tags.len()
             && !(json_tags[i] == right_pair_tag && 0 == mismatch) {
@@ -86,7 +88,7 @@ impl JsonNode {
             i += 1;
         }
         if i >= json_tags.len() {
-            bail!("matching {} not found for json: {}", JsonTag::to_string(&[right_pair_tag]), JsonTag::to_string(&json_tags[i..]))
+            bail!("matching {} not found for json: {}", JsonTag::to_string(&[right_pair_tag]), JsonTag::to_string(&json_tags[start..]))
         }
 
         Ok(i)
@@ -211,5 +213,46 @@ impl JsonNode {
         }
 
         Ok(JsonNode::Object(prop_list))
+    }
+}
+
+#[cfg(test)]
+mod json_node_tests {
+    use super::*;
+
+    #[test]
+    fn test_one_line() -> Result<()> {
+        let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]"}}"#;
+        let json_tag_list = JsonTag::parse(json.as_bytes())?;
+        let json_node_list = JsonNode::parse(&json_tag_list)?;
+        assert_eq!(
+            json_node_list,
+            vec![
+                JsonNode::Object(
+                    vec![
+                        JsonObjProp::new(String::from("simple"), JsonNode::PlainNumber(String::from("123"))),
+                        JsonObjProp::new(
+                            String::from("array"),
+                            JsonNode::Array(
+                                vec![
+                                    JsonNode::PlainString(String::from("a")),
+                                    JsonNode::PlainString(String::from("b")),
+                                    JsonNode::PlainString(String::from("c\"")),
+                                ]
+                            ),
+                        ),
+                        JsonObjProp::new(
+                            String::from("object"),
+                            JsonNode::Object(
+                                vec![
+                                    JsonObjProp::new(String::from("prop"), JsonNode::PlainString(String::from("{true]"))),
+                                ]
+                            ),
+                        )
+                    ]
+                )
+            ]
+        );
+        Ok(())
     }
 }
