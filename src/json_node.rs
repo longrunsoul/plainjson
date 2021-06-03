@@ -164,6 +164,13 @@ impl JsonNode {
             }
 
             inner_nodes.push(node.unwrap());
+
+            // skip comma symbol
+            if i < inner_tags.len() {
+                if let JsonTag::Comma = inner_tags[i] {
+                    i += 1;
+                }
+            }
         }
 
         let array_node = JsonNode::Array(inner_nodes);
