@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use anyhow::{
     Result,
     bail,
@@ -5,7 +6,7 @@ use anyhow::{
 
 use crate::json_tag::*;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub struct JsonObjProp {
     pub name: String,
     pub value: JsonNode,
@@ -20,11 +21,11 @@ impl JsonObjProp {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub enum JsonNode {
     PlainNull,
     PlainString(String),
-    PlainNumber(String),
+    PlainNumber(f64),
     PlainBoolean(bool),
     Array(Vec<JsonNode>),
     Object(Vec<JsonObjProp>),
@@ -37,7 +38,7 @@ impl JsonNode {
         while i < json_tags.len() {
             match &json_tags[i] {
                 JsonTag::Literal(literal) => {
-                    let plain_node = JsonNode::parse_plain(literal);
+                    let plain_node = JsonNode::parse_plain(literal)?;
                     json_nodes.push(plain_node);
 
                     i += 1;
@@ -94,28 +95,31 @@ impl JsonNode {
         Ok(i)
     }
 
-    fn parse_plain(literal: &str) -> JsonNode {
-        match literal {
-            str if str.chars().all(|c| c.is_numeric() || c == '.')
-                && str.chars().filter(|c| *c == '.').count() <= 1
-            => JsonNode::PlainNumber(String::from(str)),
+    fn parse_plain(literal: &str) -> Result<JsonNode> {
+        let plain_node =
+            match literal {
+                str if str.chars().all(|c| c.is_numeric() || c == '.')
+                    && str.chars().filter(|c| *c == '.').count() <= 1
+                => JsonNode::PlainNumber(f64::from_str(str)?),
 
-            "true" | "True" | "TRUE" => JsonNode::PlainBoolean(true),
-            "false" | "False" | "FALSE" => JsonNode::PlainBoolean(false),
+                "true" | "True" | "TRUE" => JsonNode::PlainBoolean(true),
+                "false" | "False" | "FALSE" => JsonNode::PlainBoolean(false),
 
-            "null" | "Null" | "NULL" => JsonNode::PlainNull,
+                "null" | "Null" | "NULL" => JsonNode::PlainNull,
 
-            _ => {
-                if (
-                    (literal.chars().nth(0) == Some('\'') && literal.chars().last() == Some('\''))
-                        || (literal.chars().nth(0) == Some('"') && literal.chars().last() == Some('"'))
-                ) && literal.len() > 1 {
-                    JsonNode::PlainString(String::from(&literal[1..literal.len() - 1]))
-                } else {
-                    JsonNode::PlainString(String::from(literal))
+                _ => {
+                    if (
+                        (literal.chars().nth(0) == Some('\'') && literal.chars().last() == Some('\''))
+                            || (literal.chars().nth(0) == Some('"') && literal.chars().last() == Some('"'))
+                    ) && literal.len() > 1 {
+                        JsonNode::PlainString(String::from(&literal[1..literal.len() - 1]))
+                    } else {
+                        JsonNode::PlainString(String::from(literal))
+                    }
                 }
-            }
-        }
+            };
+
+        Ok(plain_node)
     }
 
     fn parse_next(json_tags: &[JsonTag], start: &mut usize) -> Result<Option<JsonNode>> {
@@ -249,7 +253,7 @@ mod json_node_tests {
             vec![
                 JsonNode::Object(
                     vec![
-                        JsonObjProp::new(String::from(r#"simple"#), JsonNode::PlainNumber(String::from(r#"123"#))),
+                        JsonObjProp::new(String::from(r#"simple"#), JsonNode::PlainNumber(123f64)),
                         JsonObjProp::new(
                             String::from(r#"array"#),
                             JsonNode::Array(
@@ -272,7 +276,7 @@ mod json_node_tests {
                 )
             ]
         );
-        
+
         Ok(())
     }
 }
