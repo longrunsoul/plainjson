@@ -70,19 +70,19 @@ impl JsonPathPart {
         }
     }
 
-    fn read_root<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>
+    fn read_root_or_current<R>(peekable_cp: &mut PeekableCodePoints<R>, path_name: &str) -> Result<Option<Self>>
         where R: Read {
         let root_part =
             match peekable_cp.peek_char(1)? {
                 None => {
                     peekable_cp.skip(1)?;
-                    JsonPathPart::new("$", None, None)
+                    JsonPathPart::new(path_name, None, None)
                 }
                 Some(c) => {
                     match c {
                         '.' => {
                             peekable_cp.skip(2)?;
-                            JsonPathPart::new("$", None, None)
+                            JsonPathPart::new(path_name, None, None)
                         }
                         '[' => {
                             match peekable_cp.peek_char(2)? {
@@ -91,12 +91,12 @@ impl JsonPathPart {
                                     match c {
                                         '\'' => {
                                             peekable_cp.skip(1)?;
-                                            JsonPathPart::new("$", None, None)
+                                            JsonPathPart::new(path_name, None, None)
                                         }
                                         '0'..='9' | ':' => {
                                             peekable_cp.skip(1)?;
                                             let index_selector = ArrayIndexSelector::parse(peekable_cp)?;
-                                            JsonPathPart::new("$", Some(index_selector), None)
+                                            JsonPathPart::new(path_name, Some(index_selector), None)
                                         }
                                         _ => bail!("unrecognized json path: {}...", peekable_cp.peek(3)?)
                                     }
@@ -111,10 +111,6 @@ impl JsonPathPart {
         Ok(Some(root_part))
     }
 
-    fn read_current<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>
-        where R: Read {
-        todo!()
-    }
     fn read_square_notation<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>
         where R: Read {
         todo!()
@@ -129,8 +125,8 @@ impl JsonPathPart {
             None => Ok(None),
             Some(c) => {
                 match c {
-                    '$' => JsonPathPart::read_root(peekable_cp),
-                    '@' => JsonPathPart::read_current(peekable_cp),
+                    '$' => JsonPathPart::read_root_or_current(peekable_cp, "$"),
+                    '@' => JsonPathPart::read_root_or_current(peekable_cp, "@"),
                     '[' => JsonPathPart::read_square_notation(peekable_cp),
                     _ => JsonPathPart::read_dot_notation(peekable_cp),
                 }
