@@ -12,6 +12,13 @@ pub enum ArrayIndexSelector {
     Multiple(Vec<usize>),
 }
 
+impl ArrayIndexSelector {
+    pub fn parse<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Self>
+        where R: Read {
+        todo!()
+    }
+}
+
 pub enum FilterExpressionOperand {
     PlainNull,
     PlainString(String),
@@ -55,28 +62,65 @@ pub struct JsonPathPart {
 }
 
 impl JsonPathPart {
+    fn new(path_name: &str, index_selector: Option<ArrayIndexSelector>, filter: Option<FilterExpression>) -> Self {
+        JsonPathPart {
+            path_name: String::from(path_name),
+            index_selector,
+            filter,
+        }
+    }
+
     fn read_root<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>
         where R: Read {
+        let root_part =
+            match peekable_cp.peek_char(1)? {
+                None => {
+                    peekable_cp.skip(1)?;
+                    JsonPathPart::new("$", None, None)
+                }
+                Some(c) => {
+                    match c {
+                        '.' => {
+                            peekable_cp.skip(2)?;
+                            JsonPathPart::new("$", None, None)
+                        }
+                        '[' => {
+                            match peekable_cp.peek_char(2)? {
+                                None => bail!("unexpected end: {}", peekable_cp.peek(2)?),
+                                Some(c) => {
+                                    match c {
+                                        '\'' => {
+                                            peekable_cp.skip(1)?;
+                                            JsonPathPart::new("$", None, None)
+                                        }
+                                        '0'..='9' | ':' => {
+                                            peekable_cp.skip(1)?;
+                                            let index_selector = ArrayIndexSelector::parse(peekable_cp)?;
+                                            JsonPathPart::new("$", Some(index_selector), None)
+                                        }
+                                        _ => bail!("unrecognized json path: {}...", peekable_cp.peek(3)?)
+                                    }
+                                }
+                            }
+                        }
+                        _ => bail!("unrecognized json path: {}...", peekable_cp.peek(2)?)
+                    }
+                }
+            };
 
-
-        todo!()
+        Ok(Some(root_part))
     }
+
     fn read_current<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>
         where R: Read {
-
-
         todo!()
     }
     fn read_square_notation<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>
         where R: Read {
-
-
         todo!()
     }
     fn read_dot_notation<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>
         where R: Read {
-
-
         todo!()
     }
     pub fn read_part<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>

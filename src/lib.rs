@@ -1,7 +1,7 @@
 mod peekable_codepoints;
 pub mod json_tag;
 pub mod json_node;
-mod json_path;
+pub mod json_path;
 
 #[cfg(test)]
 mod tests {
