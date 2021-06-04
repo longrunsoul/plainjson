@@ -6,17 +6,26 @@ use anyhow::{
 
 use crate::peekable_codepoints::*;
 
+pub enum PartFragType {
+    None,
+    RootPathName,
+    CurrentPathName,
+    DotNotationPathName,
+    SquareNotationPathName,
+    ElementSelector,
+    Filter,
+}
+
+impl PartFragType {
+    pub fn identiry_frag<R>(peekable_cp: &PeekableCodePoints<R>, start: usize) -> Self {
+        todo!()
+    }
+}
+
 pub enum ArrayIndexSelector {
     Single(usize),
     Range(Option<i32>, Option<i32>),
     Multiple(Vec<usize>),
-}
-
-impl ArrayIndexSelector {
-    pub fn parse<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Self>
-        where R: Read {
-        todo!()
-    }
 }
 
 pub enum FilterExpressionOperand {
@@ -69,69 +78,37 @@ impl JsonPathPart {
             filter,
         }
     }
+    pub fn parse_next<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>
+        where R: Read {
+        let mut path_name = String::default();
+        let mut elem_selector = None;
+        let mut filter = None;
 
-    fn read_root_or_current<R>(peekable_cp: &mut PeekableCodePoints<R>, path_name: &str) -> Result<Option<Self>>
-        where R: Read {
-        let root_part =
-            match peekable_cp.peek_char(1)? {
-                None => {
-                    peekable_cp.skip(1)?;
-                    JsonPathPart::new(path_name, None, None)
-                }
-                Some(c) => {
-                    match c {
-                        '.' => {
-                            peekable_cp.skip(2)?;
-                            JsonPathPart::new(path_name, None, None)
-                        }
-                        '[' => {
-                            match peekable_cp.peek_char(2)? {
-                                None => bail!("unexpected end: {}", peekable_cp.peek(2)?),
-                                Some(c) => {
-                                    match c {
-                                        '\'' => {
-                                            peekable_cp.skip(1)?;
-                                            JsonPathPart::new(path_name, None, None)
-                                        }
-                                        '0'..='9' | ':' => {
-                                            peekable_cp.skip(1)?;
-                                            let index_selector = ArrayIndexSelector::parse(peekable_cp)?;
-                                            JsonPathPart::new(path_name, Some(index_selector), None)
-                                        }
-                                        _ => bail!("unrecognized json path: {}...", peekable_cp.peek(3)?)
-                                    }
-                                }
-                            }
-                        }
-                        _ => bail!("unrecognized json path: {}...", peekable_cp.peek(2)?)
-                    }
-                }
-            };
-
-        Ok(Some(root_part))
-    }
-
-    fn read_square_notation<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>
-        where R: Read {
-        todo!()
-    }
-    fn read_dot_notation<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>
-        where R: Read {
-        todo!()
-    }
-    pub fn read_part<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>
-        where R: Read {
-        match peekable_cp.peek_char(0)? {
-            None => Ok(None),
-            Some(c) => {
-                match c {
-                    '$' => JsonPathPart::read_root_or_current(peekable_cp, "$"),
-                    '@' => JsonPathPart::read_root_or_current(peekable_cp, "@"),
-                    '[' => JsonPathPart::read_square_notation(peekable_cp),
-                    _ => JsonPathPart::read_dot_notation(peekable_cp),
-                }
-            }
+        // TODO: IMPLEMENT DETAILED CODE
+        let frag_type = PartFragType::identiry_frag(&peekable_cp);
+        match frag_type {
+            None => return Ok(None),
+            PartFragType::RootPathName | PartFragType::CurrentPathName => {}
+            PartFragType::DotNotationPathName => {}
+            PartFragType::SquareNotationPathName => {}
+            _ => bail!(""),
         }
+
+        let next_frag_type = PartFragType::identiry_frag(&peekable_cp);
+        match next_frag_type {
+            PartFragType::ElementSelector => {}
+            PartFragType::Filter => {}
+            _ => (),
+        }
+
+        let last_frag_type = PartFragType::identiry_frag(&peekable_cp);
+        match last_frag_type {
+            PartFragType::Filter => {}
+            _ => (),
+        }
+
+        let part = JsonPathPart::new(&path_name, elem_selector, filter);
+        Ok(Some(part))
     }
 }
 
@@ -149,7 +126,7 @@ impl JsonPath {
         let mut path_parts = Vec::new();
         let mut peekable_cp = PeekableCodePoints::new(path_str.as_bytes());
         loop {
-            let part = JsonPathPart::read_part(&mut peekable_cp)?;
+            let part = JsonPathPart::parse_next(&mut peekable_cp)?;
             if part.is_none() {
                 break;
             }
