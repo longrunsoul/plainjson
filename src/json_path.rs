@@ -200,10 +200,6 @@ impl JsonPathPart {
             _ => bail!("unexpected json path part type: {}", frag_type),
         }
 
-        if Some('.') == peekable_cp.peek_char(0)? {
-            peekable_cp.skip(1);
-        }
-
         let next_frag_type = PartFragType::identify_frag(peekable_cp)?;
         match next_frag_type {
             PartFragType::ElementSelector => {}
@@ -242,6 +238,10 @@ impl JsonPath {
             }
 
             path_parts.push(part.unwrap());
+
+            if Some('.') == peekable_cp.peek_char(0)? {
+                peekable_cp.skip(1);
+            }
         }
 
         let json_path = JsonPath::new(path_parts);
