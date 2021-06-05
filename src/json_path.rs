@@ -5,6 +5,7 @@ use anyhow::{
 };
 
 use crate::peekable_codepoints::*;
+use core::num::flt2dec::Part;
 
 pub enum PartFragType {
     None,
@@ -17,8 +18,33 @@ pub enum PartFragType {
 }
 
 impl PartFragType {
-    pub fn identiry_frag<R>(peekable_cp: &PeekableCodePoints<R>, start: usize) -> Self {
-        todo!()
+    pub fn identify_frag<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Self> {
+        let frag_type =
+            match peekable_cp.peek_char(0)? {
+                None => PartFragType::None,
+                Some(c) => {
+                    match c {
+                        '$' => PartFragType::RootPathName,
+                        '@' => PartFragType::CurrentPathName,
+                        '[' => {
+                            match peekable_cp.peek_char(1)? {
+                                None => bail!("unexpected end: {}", peekable_cp.peek(1)?),
+                                Some(c) => {
+                                    match c {
+                                        '\'' => PartFragType::SquareNotationPathName,
+                                        '0'..='9' | '-' | ':' => PartFragType::ElementSelector,
+                                        '?' => PartFragType::Filter,
+                                        _ => bail!("unrecognized json path part fragment: {}...", peekable_cp.peek(2)?)
+                                    }
+                                }
+                            }
+                        }
+                        _ => PartFragType::DotNotationPathName,
+                    }
+                }
+            };
+
+        Ok(frag_type)
     }
 }
 
@@ -85,7 +111,7 @@ impl JsonPathPart {
         let mut filter = None;
 
         // TODO: IMPLEMENT DETAILED CODE
-        let frag_type = PartFragType::identiry_frag(&peekable_cp);
+        let frag_type = PartFragType::identify_frag(peekable_cp)?;
         match frag_type {
             None => return Ok(None),
             PartFragType::RootPathName | PartFragType::CurrentPathName => {}
@@ -94,14 +120,14 @@ impl JsonPathPart {
             _ => bail!(""),
         }
 
-        let next_frag_type = PartFragType::identiry_frag(&peekable_cp);
+        let next_frag_type = PartFragType::identify_frag(peekable_cp)?;
         match next_frag_type {
             PartFragType::ElementSelector => {}
             PartFragType::Filter => {}
             _ => (),
         }
 
-        let last_frag_type = PartFragType::identiry_frag(&peekable_cp);
+        let last_frag_type = PartFragType::identify_frag(peekable_cp)?;
         match last_frag_type {
             PartFragType::Filter => {}
             _ => (),
