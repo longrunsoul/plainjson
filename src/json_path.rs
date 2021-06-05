@@ -7,12 +7,13 @@ use anyhow::{
 use crate::peekable_codepoints::*;
 use core::num::flt2dec::Part;
 
+#[derive(Eq, PartialEq)]
 pub enum PartFragType {
     None,
     RootPathName,
     CurrentPathName,
     DotNotationPathName,
-    SquareNotationPathName,
+    BracketNotationPathName,
     ElementSelector,
     Filter,
 }
@@ -31,7 +32,7 @@ impl PartFragType {
                                 None => bail!("unexpected end: {}", peekable_cp.peek(1)?),
                                 Some(c) => {
                                     match c {
-                                        '\'' => PartFragType::SquareNotationPathName,
+                                        '\'' => PartFragType::BracketNotationPathName,
                                         '0'..='9' | '-' | ':' => PartFragType::ElementSelector,
                                         '?' => PartFragType::Filter,
                                         _ => bail!("unrecognized json path part fragment: {}...", peekable_cp.peek(2)?)
@@ -104,9 +105,43 @@ impl JsonPathPart {
             filter,
         }
     }
+
+    pub fn parse_dot_notation_path_name<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<String> {
+        let mut i = 0;
+        let mut is_escape = false;
+        loop {
+            match peekable_cp.peek_char(i)? {
+                None => break,
+                Some(c) => {
+                    match c {
+                        '\\' => {
+                            is_escape = true;
+                            continue;
+                        }
+                        '.'|'[' if !is_escape => break,
+                        _ => (),
+                    }
+                }
+            }
+
+            is_escape = false;
+            i += 1;
+        }
+        if 0 == i {
+            bail!("empty json path part fragment");
+        }
+
+        let path_name = peekable_cp.pop(i)?;
+        Ok(path_name)
+    }
+
+    pub fn parse_bracket_notation_path_name<R>(peekable_cp: &mut PeekableCodePoints<R>) -> String {
+        todo!()
+    }
+
     pub fn parse_next<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>
         where R: Read {
-        let mut path_name = String::default();
+        let path_name;
         let mut elem_selector = None;
         let mut filter = None;
 
@@ -114,10 +149,15 @@ impl JsonPathPart {
         let frag_type = PartFragType::identify_frag(peekable_cp)?;
         match frag_type {
             None => return Ok(None),
-            PartFragType::RootPathName | PartFragType::CurrentPathName => {}
-            PartFragType::DotNotationPathName => {}
-            PartFragType::SquareNotationPathName => {}
+            PartFragType::RootPathName => path_name = String::from("$"),
+            PartFragType::CurrentPathName => path_name = String::from("@"),
+            PartFragType::DotNotationPathName => path_name = JsonPathPart::parse_dot_notation_path_name(peekable_cp)?,
+            PartFragType::BracketNotationPathName => path_name = JsonPathPart::parse_bracket_notation_path_name(peekable_cp),
             _ => bail!(""),
+        }
+
+        if Some('.') == peekable_cp.peek_char(0)? {
+            peekable_cp.skip(1);
         }
 
         let next_frag_type = PartFragType::identify_frag(peekable_cp)?;
