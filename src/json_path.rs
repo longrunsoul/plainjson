@@ -7,7 +7,7 @@ use anyhow::{
 use crate::peekable_codepoints::*;
 use core::num::flt2dec::Part;
 
-#[derive(Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum PartFragType {
     None,
     RootPathName,
@@ -116,9 +116,11 @@ impl JsonPathPart {
                     match c {
                         '\\' => {
                             is_escape = true;
+
+                            i += 1;
                             continue;
                         }
-                        '.'|'[' if !is_escape => break,
+                        '.' | '[' if !is_escape => break,
                         _ => (),
                     }
                 }
@@ -135,8 +137,50 @@ impl JsonPathPart {
         Ok(path_name)
     }
 
-    pub fn parse_bracket_notation_path_name<R>(peekable_cp: &mut PeekableCodePoints<R>) -> String {
-        todo!()
+    pub fn parse_bracket_notation_path_name<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<String> {
+        let mut i = 0;
+        let mut is_escape = false;
+        let mut in_quote = false;
+        loop {
+            match peekable_cp.peek_char(i)? {
+                None => bail!("unexpected end: {}", peekable_cp.peek(i)?),
+                Some(c) => {
+                    match c {
+                        '\\' => {
+                            is_escape = true;
+
+                            i += 1;
+                            continue;
+                        }
+                        '\'' if !is_escape => {
+                            in_quote = !in_quote;
+                            if false == in_quote {
+                                match peekable_cp.peek_char(i + 1) {
+                                    None => bail!("unexpected end: {}", peekable_cp.peek(i + 1)?),
+                                    Some(c) => {
+                                        match c {
+                                            ']' => break,
+                                            _ => bail!("expecting ] at the end: {}", peekable_cp.peek(i + 2)?),
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+            }
+
+            i += 1;
+            is_escape = false;
+        }
+
+        let mut path_name_w_bracket = peekable_cp.pop(i + 1)?;
+        if path_name_w_bracket.starts_with("['") && path_name_w_bracket.ends_with("']") {
+            path_name_w_bracket = String::from(&path_name_w_bracket[2..i - 1]);
+        }
+
+        Ok(path_name_w_bracket)
     }
 
     pub fn parse_next<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>
@@ -152,8 +196,8 @@ impl JsonPathPart {
             PartFragType::RootPathName => path_name = String::from("$"),
             PartFragType::CurrentPathName => path_name = String::from("@"),
             PartFragType::DotNotationPathName => path_name = JsonPathPart::parse_dot_notation_path_name(peekable_cp)?,
-            PartFragType::BracketNotationPathName => path_name = JsonPathPart::parse_bracket_notation_path_name(peekable_cp),
-            _ => bail!(""),
+            PartFragType::BracketNotationPathName => path_name = JsonPathPart::parse_bracket_notation_path_name(peekable_cp)?,
+            _ => bail!("unexpected json path part type: {}", frag_type),
         }
 
         if Some('.') == peekable_cp.peek_char(0)? {
