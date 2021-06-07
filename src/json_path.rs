@@ -1,11 +1,13 @@
-use std::io::Read;
+use std::{
+    io::Read,
+    str::FromStr,
+};
 use anyhow::{
     Result,
     bail,
 };
 
 use crate::peekable_codepoints::*;
-use core::num::flt2dec::Part;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum PartFragType {
@@ -49,10 +51,102 @@ impl PartFragType {
     }
 }
 
-pub enum ArrayIndexSelector {
+pub enum ArrayElementSelector {
     Single(usize),
     Range(Option<i32>, Option<i32>),
     Multiple(Vec<usize>),
+}
+
+impl ArrayElementSelector {
+    fn trim_brackets(elem_selector_str: String) -> String {
+        let inner_str =
+            if elem_selector_str.starts_with("[") && elem_selector_str.ends_with("]") {
+                elem_selector_str.chars().skip(1).take(elem_selector_str.chars().count() - 2).collect()
+            } else {
+                elem_selector_str
+            };
+        inner_str
+    }
+
+    fn parse_single(elem_selector_str: String) -> Result<Self> {
+        let index_str = ArrayElementSelector::trim_brackets(elem_selector_str);
+        let index = usize::from_str(&index_str)?;
+        Ok(ArrayElementSelector::Single(index))
+    }
+
+    fn parse_range(elem_selector_str: String) -> Result<Self> {
+        let range_str = ArrayElementSelector::trim_brackets(elem_selector_str);
+        let colon_index = range_str.chars().position(|c| c == ':').unwrap();
+        let range_left_str: String = range_str.chars().take(colon_index).collect();
+        let range_right_str: String = range_str.chars().skip(colon_index + 1).collect();
+
+        let range_left =
+            if range_left_str.is_empty() {
+                None
+            } else {
+                Some(i32::from_str(&range_left_str)?)
+            };
+        let range_right =
+            if range_right_str.is_empty() {
+                None
+            } else {
+                Some(i32::from_str(&range_right_str)?)
+            };
+        Ok(ArrayElementSelector::Range(range_left, range_right))
+    }
+
+    fn parse_multiple(elem_selector_str: String) -> Result<Self> {
+        let mut indexes = Vec::new();
+
+        let mut number_str = String::new();
+        let num_list_str = ArrayElementSelector::trim_brackets(elem_selector_str);
+        for c in num_list_str.chars() {
+            if c == ',' {
+                let i = usize::from_str(&number_str)?;
+                indexes.push(i);
+
+                number_str = String::new();
+            } else {
+                number_str.push(c);
+            }
+        }
+
+        Ok(ArrayElementSelector::Multiple(indexes))
+    }
+
+    pub fn parse<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Self> {
+        let mut i = 0;
+        let mut has_comma = false;
+        let mut has_colon = false;
+        loop {
+            match peekable_cp.peek_char(i)? {
+                None => bail!("unexpected end: {}", peekable_cp.peek(i)),
+                Some(c) => {
+                    match c {
+                        ']' => break,
+                        ',' => has_comma = true,
+                        ':' => has_colon = true,
+                        '0'..='9' | '-' => (),
+                        _ => bail!("unrecognized array element selector: {}...", peekable_cp.peek(i+1)?),
+                    }
+                }
+            }
+
+            i += 1;
+        }
+
+        let elem_selector_str = peekable_cp.pop(i + 1)?;
+        let elem_selector =
+            if has_comma {
+                ArrayElementSelector::parse_multiple(elem_selector_str)?
+            } else if has_colon {
+                ArrayElementSelector::parse_range(elem_selector_str)?
+            } else {
+                ArrayElementSelector::parse_single(elem_selector_str)?
+            };
+
+        Ok(elem_selector)
+    }
 }
 
 pub enum FilterExpressionOperand {
@@ -93,12 +187,12 @@ pub struct FilterExpression {
 
 pub struct JsonPathPart {
     pub path_name: String,
-    pub index_selector: Option<ArrayIndexSelector>,
+    pub index_selector: Option<ArrayElementSelector>,
     pub filter: Option<FilterExpression>,
 }
 
 impl JsonPathPart {
-    fn new(path_name: &str, index_selector: Option<ArrayIndexSelector>, filter: Option<FilterExpression>) -> Self {
+    fn new(path_name: &str, index_selector: Option<ArrayElementSelector>, filter: Option<FilterExpression>) -> Self {
         JsonPathPart {
             path_name: String::from(path_name),
             index_selector,
@@ -202,7 +296,7 @@ impl JsonPathPart {
 
         let next_frag_type = PartFragType::identify_frag(peekable_cp)?;
         match next_frag_type {
-            PartFragType::ElementSelector => {}
+            PartFragType::ElementSelector => elem_selector = Some(ArrayElementSelector::parse(peekable_cp)?),
             PartFragType::Filter => {}
             _ => (),
         }
