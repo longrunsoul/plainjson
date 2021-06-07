@@ -9,7 +9,7 @@ use anyhow::{
 
 use crate::peekable_codepoints::*;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum PartFragType {
     None,
     RootPathName,
@@ -21,12 +21,14 @@ pub enum PartFragType {
 }
 
 impl PartFragType {
-    pub fn identify_frag<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Self> {
+    pub fn identify_frag<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Self>
+        where R: Read {
         let frag_type =
             match peekable_cp.peek_char(0)? {
                 None => PartFragType::None,
                 Some(c) => {
                     match c {
+                        '.' => PartFragType::None,
                         '$' => PartFragType::RootPathName,
                         '@' => PartFragType::CurrentPathName,
                         '[' => {
@@ -35,7 +37,7 @@ impl PartFragType {
                                 Some(c) => {
                                     match c {
                                         '\'' => PartFragType::BracketNotationPathName,
-                                        '0'..='9' | '-' | ':' => PartFragType::ElementSelector,
+                                        '0'..='9' | '-' | ':' | '*' => PartFragType::ElementSelector,
                                         '?' => PartFragType::Filter,
                                         _ => bail!("unrecognized json path part fragment: {}...", peekable_cp.peek(2)?)
                                     }
@@ -51,7 +53,9 @@ impl PartFragType {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum ArrayElementSelector {
+    All,
     Single(usize),
     Range(Option<i32>, Option<i32>),
     Multiple(Vec<usize>),
@@ -68,8 +72,12 @@ impl ArrayElementSelector {
         inner_str
     }
 
-    fn parse_single(elem_selector_str: String) -> Result<Self> {
+    fn parse_single_or_all(elem_selector_str: String) -> Result<Self> {
         let index_str = ArrayElementSelector::trim_brackets(elem_selector_str);
+        if index_str == "*" {
+            return Ok(ArrayElementSelector::All);
+        }
+
         let index = usize::from_str(&index_str)?;
         Ok(ArrayElementSelector::Single(index))
     }
@@ -107,26 +115,37 @@ impl ArrayElementSelector {
 
                 number_str = String::new();
             } else {
+                if c.is_whitespace() {
+                    continue;
+                }
+
                 number_str.push(c);
             }
         }
+        let i = usize::from_str(&number_str)?;
+        indexes.push(i);
 
         Ok(ArrayElementSelector::Multiple(indexes))
     }
 
-    pub fn parse<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Self> {
+    pub fn parse<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Self>
+        where R: Read {
         let mut i = 0;
         let mut has_comma = false;
         let mut has_colon = false;
         loop {
             match peekable_cp.peek_char(i)? {
-                None => bail!("unexpected end: {}", peekable_cp.peek(i)),
+                None => bail!("unexpected end: {}", peekable_cp.peek(i)?),
                 Some(c) => {
                     match c {
                         ']' => break,
                         ',' => has_comma = true,
                         ':' => has_colon = true,
-                        '0'..='9' | '-' => (),
+                        '0'..='9' | '-' | '*' => (),
+
+                        '[' => (),
+                        c if c.is_whitespace() => (),
+
                         _ => bail!("unrecognized array element selector: {}...", peekable_cp.peek(i+1)?),
                     }
                 }
@@ -142,13 +161,14 @@ impl ArrayElementSelector {
             } else if has_colon {
                 ArrayElementSelector::parse_range(elem_selector_str)?
             } else {
-                ArrayElementSelector::parse_single(elem_selector_str)?
+                ArrayElementSelector::parse_single_or_all(elem_selector_str)?
             };
 
         Ok(elem_selector)
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum FilterExpressionOperand {
     PlainNull,
     PlainString(String),
@@ -160,6 +180,7 @@ pub enum FilterExpressionOperand {
     JsonPath(Box<JsonPath>),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum FilterExpressionOperator {
     Equal,
     NotEqual,
@@ -179,28 +200,31 @@ pub enum FilterExpressionOperator {
     Empty,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct FilterExpression {
     pub operator: Option<FilterExpressionOperator>,
     pub operand_a: FilterExpressionOperand,
     pub operand_b: Option<FilterExpressionOperand>,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct JsonPathPart {
     pub path_name: String,
-    pub index_selector: Option<ArrayElementSelector>,
+    pub elem_selector: Option<ArrayElementSelector>,
     pub filter: Option<FilterExpression>,
 }
 
 impl JsonPathPart {
-    fn new(path_name: &str, index_selector: Option<ArrayElementSelector>, filter: Option<FilterExpression>) -> Self {
+    fn new(path_name: &str, elem_selector: Option<ArrayElementSelector>, filter: Option<FilterExpression>) -> Self {
         JsonPathPart {
             path_name: String::from(path_name),
-            index_selector,
+            elem_selector,
             filter,
         }
     }
 
-    pub fn parse_dot_notation_path_name<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<String> {
+    pub fn parse_dot_notation_path_name<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<String>
+        where R: Read {
         let mut i = 0;
         let mut is_escape = false;
         loop {
@@ -231,7 +255,8 @@ impl JsonPathPart {
         Ok(path_name)
     }
 
-    pub fn parse_bracket_notation_path_name<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<String> {
+    pub fn parse_bracket_notation_path_name<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<String>
+        where R: Read {
         let mut i = 0;
         let mut is_escape = false;
         let mut in_quote = false;
@@ -249,7 +274,7 @@ impl JsonPathPart {
                         '\'' if !is_escape => {
                             in_quote = !in_quote;
                             if false == in_quote {
-                                match peekable_cp.peek_char(i + 1) {
+                                match peekable_cp.peek_char(i + 1)? {
                                     None => bail!("unexpected end: {}", peekable_cp.peek(i + 1)?),
                                     Some(c) => {
                                         match c {
@@ -269,9 +294,9 @@ impl JsonPathPart {
             is_escape = false;
         }
 
-        let mut path_name_w_bracket = peekable_cp.pop(i + 1)?;
+        let mut path_name_w_bracket = peekable_cp.pop(i + 2)?;
         if path_name_w_bracket.starts_with("['") && path_name_w_bracket.ends_with("']") {
-            path_name_w_bracket = String::from(&path_name_w_bracket[2..i - 1]);
+            path_name_w_bracket = path_name_w_bracket.chars().skip(2).take(i - 2).collect();
         }
 
         Ok(path_name_w_bracket)
@@ -283,17 +308,23 @@ impl JsonPathPart {
         let mut elem_selector = None;
         let mut filter = None;
 
-        // TODO: IMPLEMENT DETAILED CODE
         let frag_type = PartFragType::identify_frag(peekable_cp)?;
         match frag_type {
-            None => return Ok(None),
-            PartFragType::RootPathName => path_name = String::from("$"),
-            PartFragType::CurrentPathName => path_name = String::from("@"),
+            PartFragType::None => return Ok(None),
+            PartFragType::RootPathName => {
+                path_name = String::from("$");
+                peekable_cp.skip(1)?;
+            },
+            PartFragType::CurrentPathName => {
+                path_name = String::from("@");
+                peekable_cp.skip(1)?;
+            },
             PartFragType::DotNotationPathName => path_name = JsonPathPart::parse_dot_notation_path_name(peekable_cp)?,
             PartFragType::BracketNotationPathName => path_name = JsonPathPart::parse_bracket_notation_path_name(peekable_cp)?,
-            _ => bail!("unexpected json path part type: {}", frag_type),
+            _ => bail!("unexpected json path part type: {:?}", frag_type),
         }
 
+        // TODO: IMPLEMENT PARSING OF FILTER EXPRESSION
         let next_frag_type = PartFragType::identify_frag(peekable_cp)?;
         match next_frag_type {
             PartFragType::ElementSelector => elem_selector = Some(ArrayElementSelector::parse(peekable_cp)?),
@@ -312,6 +343,7 @@ impl JsonPathPart {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct JsonPath {
     pub parts: Vec<JsonPathPart>,
 }
@@ -334,11 +366,54 @@ impl JsonPath {
             path_parts.push(part.unwrap());
 
             if Some('.') == peekable_cp.peek_char(0)? {
-                peekable_cp.skip(1);
+                peekable_cp.skip(1)?;
             }
         }
 
         let json_path = JsonPath::new(path_parts);
         Ok(json_path)
+    }
+}
+
+#[cfg(test)]
+mod json_path_tests {
+    use super::*;
+
+    #[test]
+    fn test_no_filter_dot_notation() -> Result<()> {
+        let json_path_str = r#"$[-1:].store[:3].bicycle[0, 13].color[*]"#;
+        let json_path = JsonPath::parse(json_path_str)?;
+        assert_eq!(
+            json_path,
+            JsonPath::new(
+                vec![
+                    JsonPathPart::new("$", Some(ArrayElementSelector::Range(Some(-1), None)), None),
+                    JsonPathPart::new("store", Some(ArrayElementSelector::Range(None, Some(3))), None),
+                    JsonPathPart::new("bicycle", Some(ArrayElementSelector::Multiple(vec![0, 13])), None),
+                    JsonPathPart::new("color", Some(ArrayElementSelector::All), None),
+                ]
+            )
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_no_filter_bracket_notation() -> Result<()> {
+        let json_path_str = r#"$[-1:]['store'][:3]['bicycle'][0, 13]['color'][*]"#;
+        let json_path = JsonPath::parse(json_path_str)?;
+        assert_eq!(
+            json_path,
+            JsonPath::new(
+                vec![
+                    JsonPathPart::new("$", Some(ArrayElementSelector::Range(Some(-1), None)), None),
+                    JsonPathPart::new("store", Some(ArrayElementSelector::Range(None, Some(3))), None),
+                    JsonPathPart::new("bicycle", Some(ArrayElementSelector::Multiple(vec![0, 13])), None),
+                    JsonPathPart::new("color", Some(ArrayElementSelector::All), None),
+                ]
+            )
+        );
+
+        Ok(())
     }
 }
