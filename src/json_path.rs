@@ -9,6 +9,7 @@ use anyhow::{
 
 use crate::peekable_codepoints::*;
 use crate::filter_expression::*;
+use crate::json_node::*;
 
 #[derive(Debug, PartialEq)]
 pub enum PartFragType {
@@ -276,11 +277,11 @@ impl JsonPathPart {
             PartFragType::RootPathName => {
                 path_name = String::from("$");
                 peekable_cp.skip(1)?;
-            },
+            }
             PartFragType::CurrentPathName => {
                 path_name = String::from("@");
                 peekable_cp.skip(1)?;
-            },
+            }
             PartFragType::DotNotationPathName => path_name = JsonPathPart::parse_dot_notation_path_name(peekable_cp)?,
             PartFragType::BracketNotationPathName => path_name = JsonPathPart::parse_bracket_notation_path_name(peekable_cp)?,
             _ => bail!("unexpected json path part type: {:?}", frag_type),
@@ -303,6 +304,55 @@ impl JsonPathPart {
         let part = JsonPathPart::new(&path_name, elem_selector, filter);
         Ok(Some(part))
     }
+}
+
+fn get_mut_by_indexes<'a, T>(vec: &'a mut Vec<T>, indexes: &Vec<usize>) -> Vec<&'a mut T> {
+    let mut results = Vec::new();
+
+    let mut i = 0;
+    let mut iter = vec.iter_mut();
+    loop {
+        let elem = iter.next();
+        if elem.is_none() {
+            break;
+        }
+
+        let elem = elem.unwrap();
+        if indexes.contains(&i) {
+            results.push(elem);
+        }
+
+        i += 1;
+    }
+
+    results
+}
+
+fn get_mut_by_index_range<T>(vec: &mut Vec<T>, start: usize, end: usize) -> Vec<&mut T> {
+    let mut results = Vec::new();
+
+    let mut i = 0;
+    let mut iter = vec.iter_mut();
+    loop {
+        let elem = iter.next();
+        if elem.is_none() {
+            break;
+        }
+        if i < start {
+            i += 1;
+            continue;
+        }
+        if i >= end {
+            break;
+        }
+
+        let elem = elem.unwrap();
+        results.push(elem);
+
+        i += 1;
+    }
+
+    results
 }
 
 #[derive(Debug, PartialEq)]
@@ -334,6 +384,115 @@ impl JsonPath {
 
         let json_path = JsonPath::new(path_parts);
         Ok(json_path)
+    }
+    fn evaluate_json_path<'a>(&self, json_node: &'a mut JsonNode) -> Result<Vec<&'a mut JsonNode>> {
+        let mut current = vec![json_node];
+        for path_part in &self.parts {
+            match path_part.path_name.as_str() {
+                "$" => (),
+                "@" => (),
+                pn => {
+                    let mut next = Vec::new();
+                    for c in current {
+                        match c {
+                            JsonNode::Object(pl) => {
+                                let prop_index = pl.iter().position(|x| x.name == pn);
+                                if !prop_index.is_none() {
+                                    let n = &mut pl[prop_index.unwrap()].value;
+                                    next.push(n);
+                                }
+                            }
+
+                            // ignore when applied on non-object notation
+                            _ => (),
+                        }
+                    }
+
+                    current = next;
+                }
+            }
+
+            match &path_part.elem_selector {
+                None => (),
+                Some(es) => {
+                    let mut next = Vec::new();
+                    for c in current {
+                        match c {
+                            JsonNode::Array(arr) => {
+                                match es {
+                                    ArrayElementSelector::Single(i) => {
+                                        if *i < arr.len() {
+                                            next.push(&mut arr[*i]);
+                                        }
+                                    }
+                                    ArrayElementSelector::Multiple(il) => {
+                                        let mut selected = get_mut_by_indexes(arr, il);
+                                        next.append(&mut selected);
+                                    }
+                                    ArrayElementSelector::Range(s, e) => {
+                                        match s {
+                                            None => {
+                                                match e {
+                                                    None => next.extend(arr.iter_mut()),
+                                                    Some(e) if *e < 0 => bail!("array element selector end index must not be negative: [:{}]", e),
+                                                    Some(e) if *e >= 0 => {
+                                                        let mut selected = get_mut_by_index_range(arr, 0, *e as usize);
+                                                        next.append(&mut selected);
+                                                    }
+                                                    _ => bail!("range element selector unreachable code reached!"),
+                                                }
+                                            }
+                                            Some(s) if *s < 0 => {
+                                                match e {
+                                                    None => {
+                                                        let mut selected = get_mut_by_index_range(arr, ((arr.len() as i32) + *s) as usize, arr.len());
+                                                        next.append(&mut selected);
+                                                    }
+                                                    Some(e) => bail!("array element selector start index must not be negative when end index specified: [{}:{}]", s, e),
+                                                }
+                                            }
+                                            Some(s) if *s >= 0 => {
+                                                match e {
+                                                    None => {
+                                                        let mut selected = get_mut_by_index_range(arr, *s as usize, arr.len());
+                                                        next.append(&mut selected);
+                                                    }
+                                                    Some(e) if *e < 0 => bail!("array element selector end index must not be negative: [{}:{}]", s, e),
+                                                    Some(e) if *e >= 0 => {
+                                                        let mut selected = get_mut_by_index_range(arr, *s as usize, *e as usize);
+                                                        next.append(&mut selected);
+                                                    }
+                                                    _ => bail!("range element selector unreachable code reached!"),
+                                                }
+                                            }
+                                            _ => bail!("range element selector unreachable code reached!"),
+                                        }
+                                    }
+                                    ArrayElementSelector::All => {
+                                        let mut selected = get_mut_by_index_range(arr, 0, arr.len());
+                                        next.append(&mut selected);
+                                    }
+                                }
+                            }
+                            _ => bail!("element selector must be applied on array notation, {} is not array", path_part.path_name)
+                        }
+                    }
+
+                    current = next;
+                }
+            }
+        }
+
+        Ok(current)
+    }
+    pub fn json_path_get<'a>(&self, json_node: &'a mut JsonNode) -> Result<Vec<&'a JsonNode>> {
+        let mut result = Vec::new();
+        let nodes = self.evaluate_json_path(json_node)?;
+        for n in nodes {
+            result.push(&*n);
+        }
+
+        Ok(result)
     }
 }
 
