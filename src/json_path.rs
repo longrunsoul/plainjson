@@ -585,6 +585,52 @@ impl JsonPath {
     }
 }
 
+impl JsonNode {
+    pub fn get_number(&mut self, json_path: &str) -> Result<Option<f64>> {
+        let json_path = JsonPath::parse(json_path)?;
+        let mut selected = json_path.json_path_get_number(self)?;
+        if selected.is_empty() {
+            return Ok(None);
+        }
+
+        let selected = selected.remove(0);
+        Ok(Some(selected))
+    }
+
+    pub fn get_bool(&mut self, json_path: &str) -> Result<Option<bool>> {
+        let json_path = JsonPath::parse(json_path)?;
+        let mut selected = json_path.json_path_get_bool( self)?;
+        if selected.is_empty() {
+            return Ok(None);
+        }
+
+        let selected = selected.remove(0);
+        Ok(Some(selected))
+    }
+
+    pub fn get_str(&mut self, json_path: &str) -> Result<Option<String>> {
+        let json_path = JsonPath::parse(json_path)?;
+        let mut selected = json_path.json_path_get_str(self)?;
+        if selected.is_empty() {
+            return Ok(None);
+        }
+
+        let selected = selected.remove(0);
+        Ok(Some(selected))
+    }
+
+    pub fn get_raw(&mut self, json_path: &str) -> Result<Option<&JsonNode>> {
+        let json_path = JsonPath::parse(json_path)?;
+        let mut selected = json_path.json_path_get(self)?;
+        if selected.is_empty() {
+            return Ok(None);
+        }
+
+        let selected = selected.remove(0);
+        Ok(Some(selected))
+    }
+}
+
 #[cfg(test)]
 mod json_path_tests {
     use super::*;
