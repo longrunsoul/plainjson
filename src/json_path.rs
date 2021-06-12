@@ -496,6 +496,43 @@ impl JsonPath {
 
         Ok(result)
     }
+    pub fn json_path_get_number(&self, json_node: &mut JsonNode) -> Result<Vec<f64>> {
+        let mut numbers = Vec::new();
+        let selected = self.json_path_get(json_node)?;
+        for n in selected {
+            match n {
+                JsonNode::PlainNumber(num) => numbers.push(*num),
+                _ => bail!("expecting number, but found: {:?}", n),
+            }
+        }
+
+        Ok(numbers)
+    }
+    pub fn json_path_get_bool(&self, json_node: &mut JsonNode) -> Result<Vec<bool>> {
+        let mut bvalues = Vec::new();
+        let selected = self.json_path_get(json_node)?;
+        for n in selected {
+            match n {
+                JsonNode::PlainBoolean(b) => bvalues.push(*b),
+                _ => bail!("expecting bool, but found: {:?}", n),
+            }
+        }
+
+        Ok(bvalues)
+    }
+    pub fn json_path_get_str(&self, json_node: &mut JsonNode) -> Result<Vec<String>> {
+        let mut strs = Vec::new();
+        let selected = self.json_path_get(json_node)?;
+        for n in selected {
+            match n {
+                JsonNode::PlainString(s) => strs.push(s.clone()),
+                _ => bail!("expecting string, but found: {:?}", n),
+            }
+        }
+
+        Ok(strs)
+    }
+
     pub fn json_path_set_null(&self, json_node: &mut JsonNode) -> Result<()> {
         let selected = self.evaluate_json_path(json_node)?;
         for n in selected {
