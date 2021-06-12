@@ -397,6 +397,8 @@ impl JsonPath {
                         match c {
                             JsonNode::Object(pl) => {
                                 let prop_index = pl.iter().position(|x| x.name == pn);
+
+                                // ignore if not found
                                 if !prop_index.is_none() {
                                     let n = &mut pl[prop_index.unwrap()].value;
                                     next.push(n);
@@ -499,6 +501,7 @@ impl JsonPath {
 #[cfg(test)]
 mod json_path_tests {
     use super::*;
+    use crate::json_tag::*;
 
     #[test]
     fn test_no_filter_dot_notation() -> Result<()> {
@@ -533,6 +536,90 @@ mod json_path_tests {
                     JsonPathPart::new("color", Some(ArrayElementSelector::All), None),
                 ]
             )
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_json_path_array() -> Result<()> {
+        let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]"}}"#;
+        let json_tag_list = JsonTag::parse(json.as_bytes())?;
+        let mut json_node_list = JsonNode::parse(&json_tag_list)?;
+        let mut json_node = json_node_list.remove(0);
+
+        let json_path = r#"$.array[1]"#;
+        let json_path = JsonPath::parse(json_path)?;
+        let selected = json_path.json_path_get(&mut json_node)?;
+        assert_eq!(
+            selected,
+            vec![
+                &JsonNode::PlainString(String::from("b"))
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_json_path_object() -> Result<()> {
+        let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]"}}"#;
+        let json_tag_list = JsonTag::parse(json.as_bytes())?;
+        let mut json_node_list = JsonNode::parse(&json_tag_list)?;
+        let mut json_node = json_node_list.remove(0);
+
+        let json_path = r#"$.object.prop"#;
+        let json_path = JsonPath::parse(json_path)?;
+        let selected = json_path.json_path_get(&mut json_node)?;
+        assert_eq!(
+            selected,
+            vec![
+                &JsonNode::PlainString(String::from(r#"{true]"#))
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_json_path_complex() -> Result<()> {
+        let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
+        let json_tag_list = JsonTag::parse(json.as_bytes())?;
+        let mut json_node_list = JsonNode::parse(&json_tag_list)?;
+        let mut json_node = json_node_list.remove(0);
+
+        let json_path = r#"$.object.nested[-4:]"#;
+        let json_path = JsonPath::parse(json_path)?;
+        let selected = json_path.json_path_get(&mut json_node)?;
+        assert_eq!(
+            selected,
+            vec![
+                &JsonNode::PlainBoolean(false),
+                &JsonNode::PlainNumber(3f64),
+                &JsonNode::PlainString(String::from("yes")),
+                &JsonNode::PlainString(String::from("no")),
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_json_path_bracket_notation() -> Result<()> {
+        let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
+        let json_tag_list = JsonTag::parse(json.as_bytes())?;
+        let mut json_node_list = JsonNode::parse(&json_tag_list)?;
+        let mut json_node = json_node_list.remove(0);
+
+        let json_path = r#"$['object']['nested'][1, 3]"#;
+        let json_path = JsonPath::parse(json_path)?;
+        let selected = json_path.json_path_get(&mut json_node)?;
+        assert_eq!(
+            selected,
+            vec![
+                &JsonNode::PlainBoolean(false),
+                &JsonNode::PlainString(String::from("yes")),
+            ]
         );
 
         Ok(())
