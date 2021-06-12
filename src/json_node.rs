@@ -75,6 +75,35 @@ impl JsonNode {
         Ok(json_nodes)
     }
 
+    fn parse_next(json_tags: &[JsonTag], start: &mut usize) -> Result<Option<JsonNode>> {
+        let i = *start;
+        let node = match &json_tags[i] {
+            JsonTag::Literal(_) => {
+                *start += 1;
+                JsonNode::parse(&json_tags[i..=i])?.into_iter().next()
+            }
+            JsonTag::LeftSquare => {
+                let right_square_i = JsonNode::find_match_tag(json_tags, i, JsonTag::LeftSquare, JsonTag::RightSquare)?;
+
+                *start = right_square_i + 1;
+                JsonNode::parse(&json_tags[i..=right_square_i])?.into_iter().next()
+            }
+            JsonTag::LeftCurly => {
+                let right_curly_i = JsonNode::find_match_tag(json_tags, i, JsonTag::LeftCurly, JsonTag::RightCurly)?;
+
+                *start = right_curly_i + 1;
+                JsonNode::parse(&json_tags[i..=right_curly_i])?.into_iter().next()
+            }
+
+            _ => {
+                *start += 1;
+                None
+            }
+        };
+
+        Ok(node)
+    }
+
     fn find_match_tag(json_tags: &[JsonTag], start: usize, left_pair_tag: JsonTag, right_pair_tag: JsonTag) -> Result<usize> {
         let mut i = start + 1;
         let mut mismatch = 0;
@@ -120,35 +149,6 @@ impl JsonNode {
             };
 
         Ok(plain_node)
-    }
-
-    fn parse_next(json_tags: &[JsonTag], start: &mut usize) -> Result<Option<JsonNode>> {
-        let i = *start;
-        let node = match &json_tags[i] {
-            JsonTag::Literal(_) => {
-                *start += 1;
-                JsonNode::parse(&json_tags[i..=i])?.into_iter().next()
-            }
-            JsonTag::LeftSquare => {
-                let right_square_i = JsonNode::find_match_tag(json_tags, i, JsonTag::LeftSquare, JsonTag::RightSquare)?;
-
-                *start = right_square_i + 1;
-                JsonNode::parse(&json_tags[i..=right_square_i])?.into_iter().next()
-            }
-            JsonTag::LeftCurly => {
-                let right_curly_i = JsonNode::find_match_tag(json_tags, i, JsonTag::LeftCurly, JsonTag::RightCurly)?;
-
-                *start = right_curly_i + 1;
-                JsonNode::parse(&json_tags[i..=right_curly_i])?.into_iter().next()
-            }
-
-            _ => {
-                *start += 1;
-                None
-            }
-        };
-
-        Ok(node)
     }
 
     fn parse_array(json_tags: &[JsonTag]) -> Result<JsonNode> {

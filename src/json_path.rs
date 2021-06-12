@@ -23,7 +23,7 @@ pub enum PartFragType {
 }
 
 impl PartFragType {
-    pub fn identify_frag<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Self>
+    pub(crate) fn identify_frag<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Self>
         where R: Read {
         let frag_type =
             match peekable_cp.peek_char(0)? {
@@ -130,7 +130,7 @@ impl ArrayElementSelector {
         Ok(ArrayElementSelector::Multiple(indexes))
     }
 
-    pub fn parse<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Self>
+    pub(crate) fn parse<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Self>
         where R: Read {
         let mut i = 0;
         let mut has_comma = false;
@@ -186,7 +186,7 @@ impl JsonPathPart {
         }
     }
 
-    pub fn parse_dot_notation_path_name<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<String>
+    pub(crate) fn parse_dot_notation_path_name<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<String>
         where R: Read {
         let mut i = 0;
         let mut is_escape = false;
@@ -218,7 +218,7 @@ impl JsonPathPart {
         Ok(path_name)
     }
 
-    pub fn parse_bracket_notation_path_name<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<String>
+    pub(crate) fn parse_bracket_notation_path_name<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<String>
         where R: Read {
         let mut i = 0;
         let mut is_escape = false;
@@ -265,7 +265,7 @@ impl JsonPathPart {
         Ok(path_name_w_bracket)
     }
 
-    pub fn parse_next<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>
+    pub(crate) fn parse_next<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>
         where R: Read {
         let path_name;
         let mut elem_selector = None;
@@ -366,6 +366,7 @@ impl JsonPath {
             parts
         }
     }
+
     pub fn parse(path_str: &str) -> Result<Self> {
         let mut path_parts = Vec::new();
         let mut peekable_cp = PeekableCodePoints::new(path_str.as_bytes());
@@ -385,6 +386,7 @@ impl JsonPath {
         let json_path = JsonPath::new(path_parts);
         Ok(json_path)
     }
+
     fn evaluate_json_path<'a>(&self, json_node: &'a mut JsonNode) -> Result<Vec<&'a mut JsonNode>> {
         let mut current = vec![json_node];
         for path_part in &self.parts {
@@ -487,7 +489,8 @@ impl JsonPath {
 
         Ok(current)
     }
-    pub fn json_path_get<'a>(&self, json_node: &'a mut JsonNode) -> Result<Vec<&'a JsonNode>> {
+
+    pub(crate) fn json_path_get<'a>(&self, json_node: &'a mut JsonNode) -> Result<Vec<&'a JsonNode>> {
         let mut result = Vec::new();
         let nodes = self.evaluate_json_path(json_node)?;
         for n in nodes {
@@ -496,7 +499,8 @@ impl JsonPath {
 
         Ok(result)
     }
-    pub fn json_path_get_number(&self, json_node: &mut JsonNode) -> Result<Vec<f64>> {
+
+    pub(crate) fn json_path_get_number(&self, json_node: &mut JsonNode) -> Result<Vec<f64>> {
         let mut numbers = Vec::new();
         let selected = self.json_path_get(json_node)?;
         for n in selected {
@@ -508,7 +512,8 @@ impl JsonPath {
 
         Ok(numbers)
     }
-    pub fn json_path_get_bool(&self, json_node: &mut JsonNode) -> Result<Vec<bool>> {
+
+    pub(crate) fn json_path_get_bool(&self, json_node: &mut JsonNode) -> Result<Vec<bool>> {
         let mut bvalues = Vec::new();
         let selected = self.json_path_get(json_node)?;
         for n in selected {
@@ -520,7 +525,8 @@ impl JsonPath {
 
         Ok(bvalues)
     }
-    pub fn json_path_get_str(&self, json_node: &mut JsonNode) -> Result<Vec<String>> {
+
+    pub(crate) fn json_path_get_str(&self, json_node: &mut JsonNode) -> Result<Vec<String>> {
         let mut strs = Vec::new();
         let selected = self.json_path_get(json_node)?;
         for n in selected {
@@ -533,7 +539,7 @@ impl JsonPath {
         Ok(strs)
     }
 
-    pub fn json_path_set_null(&self, json_node: &mut JsonNode) -> Result<()> {
+    pub(crate) fn json_path_set_null(&self, json_node: &mut JsonNode) -> Result<()> {
         let selected = self.evaluate_json_path(json_node)?;
         for n in selected {
             *n = JsonNode::PlainNull;
@@ -541,7 +547,8 @@ impl JsonPath {
 
         Ok(())
     }
-    pub fn json_path_set_number(&self, json_node: &mut JsonNode, value: f64) -> Result<()> {
+
+    pub(crate) fn json_path_set_number(&self, json_node: &mut JsonNode, value: f64) -> Result<()> {
         let selected = self.evaluate_json_path(json_node)?;
         for n in selected {
             *n = JsonNode::PlainNumber(value);
@@ -549,7 +556,8 @@ impl JsonPath {
 
         Ok(())
     }
-    pub fn json_path_set_bool(&self, json_node: &mut JsonNode, value: bool) -> Result<()> {
+
+    pub(crate) fn json_path_set_bool(&self, json_node: &mut JsonNode, value: bool) -> Result<()> {
         let selected = self.evaluate_json_path(json_node)?;
         for n in selected {
             *n = JsonNode::PlainBoolean(value);
@@ -557,7 +565,8 @@ impl JsonPath {
 
         Ok(())
     }
-    pub fn json_path_set_str(&self, json_node: &mut JsonNode, value: &str) -> Result<()> {
+
+    pub(crate) fn json_path_set_str(&self, json_node: &mut JsonNode, value: &str) -> Result<()> {
         let selected = self.evaluate_json_path(json_node)?;
         for n in selected {
             *n = JsonNode::PlainString(String::from(value));
@@ -565,7 +574,8 @@ impl JsonPath {
 
         Ok(())
     }
-    pub fn json_path_set_complex(&self, json_node: &mut JsonNode, value: &JsonNode) -> Result<()> {
+
+    pub(crate) fn json_path_set_complex(&self, json_node: &mut JsonNode, value: &JsonNode) -> Result<()> {
         let selected = self.evaluate_json_path(json_node)?;
         for n in selected {
             *n = value.clone();

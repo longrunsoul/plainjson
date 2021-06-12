@@ -36,7 +36,7 @@ impl JsonTag {
         result
     }
 
-    pub fn read_json_tag<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<JsonTag>>
+    fn read_json_tag<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<JsonTag>>
         where R: Read
     {
         let json_tag =
