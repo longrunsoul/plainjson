@@ -6,7 +6,7 @@ use anyhow::{
 
 use crate::json_tag::*;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct JsonObjProp {
     pub name: String,
     pub value: JsonNode,
@@ -21,7 +21,7 @@ impl JsonObjProp {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum JsonNode {
     PlainNull,
     PlainString(String),

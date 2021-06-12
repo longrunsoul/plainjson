@@ -496,6 +496,46 @@ impl JsonPath {
 
         Ok(result)
     }
+    pub fn json_path_set_null(&self, json_node: &mut JsonNode) -> Result<()> {
+        let selected = self.evaluate_json_path(json_node)?;
+        for n in selected {
+            *n = JsonNode::PlainNull;
+        }
+
+        Ok(())
+    }
+    pub fn json_path_set_number(&self, json_node: &mut JsonNode, value: f64) -> Result<()> {
+        let selected = self.evaluate_json_path(json_node)?;
+        for n in selected {
+            *n = JsonNode::PlainNumber(value);
+        }
+
+        Ok(())
+    }
+    pub fn json_path_set_bool(&self, json_node: &mut JsonNode, value: bool) -> Result<()> {
+        let selected = self.evaluate_json_path(json_node)?;
+        for n in selected {
+            *n = JsonNode::PlainBoolean(value);
+        }
+
+        Ok(())
+    }
+    pub fn json_path_set_str(&self, json_node: &mut JsonNode, value: &str) -> Result<()> {
+        let selected = self.evaluate_json_path(json_node)?;
+        for n in selected {
+            *n = JsonNode::PlainString(String::from(value));
+        }
+
+        Ok(())
+    }
+    pub fn json_path_set_complex(&self, json_node: &mut JsonNode, value: &JsonNode) -> Result<()> {
+        let selected = self.evaluate_json_path(json_node)?;
+        for n in selected {
+            *n = value.clone();
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -542,7 +582,7 @@ mod json_path_tests {
     }
 
     #[test]
-    fn test_json_path_array() -> Result<()> {
+    fn test_json_path_get_array() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]"}}"#;
         let json_tag_list = JsonTag::parse(json.as_bytes())?;
         let mut json_node_list = JsonNode::parse(&json_tag_list)?;
@@ -562,7 +602,7 @@ mod json_path_tests {
     }
 
     #[test]
-    fn test_json_path_object() -> Result<()> {
+    fn test_json_path_get_object() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]"}}"#;
         let json_tag_list = JsonTag::parse(json.as_bytes())?;
         let mut json_node_list = JsonNode::parse(&json_tag_list)?;
@@ -582,7 +622,7 @@ mod json_path_tests {
     }
 
     #[test]
-    fn test_json_path_complex() -> Result<()> {
+    fn test_json_path_get_complex() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
         let json_tag_list = JsonTag::parse(json.as_bytes())?;
         let mut json_node_list = JsonNode::parse(&json_tag_list)?;
@@ -605,7 +645,7 @@ mod json_path_tests {
     }
 
     #[test]
-    fn test_json_path_bracket_notation() -> Result<()> {
+    fn test_json_path_get_bracket_notation() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
         let json_tag_list = JsonTag::parse(json.as_bytes())?;
         let mut json_node_list = JsonNode::parse(&json_tag_list)?;
@@ -619,6 +659,89 @@ mod json_path_tests {
             vec![
                 &JsonNode::PlainBoolean(false),
                 &JsonNode::PlainString(String::from("yes")),
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_json_path_set_simple() -> Result<()> {
+        let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
+        let json_tag_list = JsonTag::parse(json.as_bytes())?;
+        let mut json_node_list = JsonNode::parse(&json_tag_list)?;
+        let mut json_node = json_node_list.remove(0);
+
+        let json_path = "$.simple";
+        let json_path = JsonPath::parse(json_path)?;
+        json_path.json_path_set_bool(&mut json_node, true)?;
+
+        let selected = json_path.json_path_get(&mut json_node)?;
+        assert_eq!(
+            selected,
+            vec![
+                &JsonNode::PlainBoolean(true)
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_json_path_set_simple_array() -> Result<()> {
+        let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
+        let json_tag_list = JsonTag::parse(json.as_bytes())?;
+        let mut json_node_list = JsonNode::parse(&json_tag_list)?;
+        let mut json_node = json_node_list.remove(0);
+
+        let json_path = "$.array[*]";
+        let json_path = JsonPath::parse(json_path)?;
+        json_path.json_path_set_str(&mut json_node, "yes")?;
+
+        let selected = json_path.json_path_get(&mut json_node)?;
+        assert_eq!(
+            selected,
+            vec![
+                &JsonNode::PlainString(String::from("yes")),
+                &JsonNode::PlainString(String::from("yes")),
+                &JsonNode::PlainString(String::from("yes")),
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_json_path_set_complex() -> Result<()> {
+        let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
+        let json_tag_list = JsonTag::parse(json.as_bytes())?;
+        let mut json_node_list = JsonNode::parse(&json_tag_list)?;
+        let mut json_node = json_node_list.remove(0);
+
+        let json_path = "$.array";
+        let json_path = JsonPath::parse(json_path)?;
+        json_path.json_path_set_complex(
+            &mut json_node,
+            &JsonNode::Object(
+                vec![
+                    JsonObjProp::new(String::from("hello"), JsonNode::PlainNumber(1f64)),
+                    JsonObjProp::new(String::from("world"), JsonNode::PlainNumber(2f64)),
+                    JsonObjProp::new(String::from("love"), JsonNode::PlainNumber(3f64)),
+                ]
+            )
+        )?;
+
+        let selected = json_path.json_path_get(&mut json_node)?;
+        assert_eq!(
+            selected,
+            vec![
+                &JsonNode::Object(
+                    vec![
+                        JsonObjProp::new(String::from("hello"), JsonNode::PlainNumber(1f64)),
+                        JsonObjProp::new(String::from("world"), JsonNode::PlainNumber(2f64)),
+                        JsonObjProp::new(String::from("love"), JsonNode::PlainNumber(3f64)),
+                    ]
+                )
             ]
         );
 
