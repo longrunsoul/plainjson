@@ -687,9 +687,7 @@ mod json_path_tests {
     #[test]
     fn test_json_path_get_array() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]"}}"#;
-        let json_tag_list = JsonTag::parse(json.as_bytes())?;
-        let mut json_node_list = JsonNode::parse(&json_tag_list)?;
-        let mut json_node = json_node_list.remove(0);
+        let mut json_node = JsonNode::parse_single_node(json.as_bytes())?;
 
         let json_path = r#"$.array[1]"#;
         let json_path = JsonPath::parse(json_path)?;
@@ -707,9 +705,7 @@ mod json_path_tests {
     #[test]
     fn test_json_path_get_object() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]"}}"#;
-        let json_tag_list = JsonTag::parse(json.as_bytes())?;
-        let mut json_node_list = JsonNode::parse(&json_tag_list)?;
-        let mut json_node = json_node_list.remove(0);
+        let mut json_node = JsonNode::parse_single_node(json.as_bytes())?;
 
         let json_path = r#"$.object.prop"#;
         let json_path = JsonPath::parse(json_path)?;
@@ -727,9 +723,7 @@ mod json_path_tests {
     #[test]
     fn test_json_path_get_complex() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
-        let json_tag_list = JsonTag::parse(json.as_bytes())?;
-        let mut json_node_list = JsonNode::parse(&json_tag_list)?;
-        let mut json_node = json_node_list.remove(0);
+        let mut json_node = JsonNode::parse_single_node(json.as_bytes())?;
 
         let json_path = r#"$.object.nested[-4:]"#;
         let json_path = JsonPath::parse(json_path)?;
@@ -750,9 +744,7 @@ mod json_path_tests {
     #[test]
     fn test_json_path_get_bracket_notation() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
-        let json_tag_list = JsonTag::parse(json.as_bytes())?;
-        let mut json_node_list = JsonNode::parse(&json_tag_list)?;
-        let mut json_node = json_node_list.remove(0);
+        let mut json_node = JsonNode::parse_single_node(json.as_bytes())?;
 
         let json_path = r#"$['object']['nested'][1, 3]"#;
         let json_path = JsonPath::parse(json_path)?;
@@ -771,9 +763,7 @@ mod json_path_tests {
     #[test]
     fn test_json_path_set_simple() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
-        let json_tag_list = JsonTag::parse(json.as_bytes())?;
-        let mut json_node_list = JsonNode::parse(&json_tag_list)?;
-        let mut json_node = json_node_list.remove(0);
+        let mut json_node = JsonNode::parse_single_node(json.as_bytes())?;
 
         let json_path = "$.simple";
         let json_path = JsonPath::parse(json_path)?;
@@ -793,9 +783,7 @@ mod json_path_tests {
     #[test]
     fn test_json_path_set_simple_array() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
-        let json_tag_list = JsonTag::parse(json.as_bytes())?;
-        let mut json_node_list = JsonNode::parse(&json_tag_list)?;
-        let mut json_node = json_node_list.remove(0);
+        let mut json_node = JsonNode::parse_single_node(json.as_bytes())?;
 
         let json_path = "$.array[*]";
         let json_path = JsonPath::parse(json_path)?;
@@ -817,9 +805,7 @@ mod json_path_tests {
     #[test]
     fn test_json_path_set_complex() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
-        let json_tag_list = JsonTag::parse(json.as_bytes())?;
-        let mut json_node_list = JsonNode::parse(&json_tag_list)?;
-        let mut json_node = json_node_list.remove(0);
+        let mut json_node = JsonNode::parse_single_node(json.as_bytes())?;
 
         let json_path = "$.array";
         let json_path = JsonPath::parse(json_path)?;

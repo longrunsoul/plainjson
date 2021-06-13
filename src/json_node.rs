@@ -1,4 +1,7 @@
-use std::str::FromStr;
+use std::{
+    str::FromStr,
+    io::Read,
+};
 use anyhow::{
     Result,
     bail,
@@ -32,7 +35,25 @@ pub enum JsonNode {
 }
 
 impl JsonNode {
-    pub fn parse(json_tags: &[JsonTag]) -> Result<Vec<JsonNode>> {
+    pub fn parse_single_node<R>(reader: R) -> Result<JsonNode>
+        where R: Read {
+        let mut nodes = JsonNode::parse(reader)?;
+        if 1 != nodes.len() {
+            bail!("more than 1 node found");
+        }
+
+        let n = nodes.remove(0);
+        Ok(n)
+    }
+
+    pub fn parse<R>(reader: R) -> Result<Vec<JsonNode>>
+        where R: Read {
+        let tags = JsonTag::parse(reader)?;
+        let nodes = JsonNode::parse_tags(&tags)?;
+        Ok(nodes)
+    }
+
+    pub fn parse_tags(json_tags: &[JsonTag]) -> Result<Vec<JsonNode>> {
         let mut i = 0;
         let mut json_nodes = Vec::new();
         while i < json_tags.len() {
@@ -80,19 +101,19 @@ impl JsonNode {
         let node = match &json_tags[i] {
             JsonTag::Literal(_) => {
                 *start += 1;
-                JsonNode::parse(&json_tags[i..=i])?.into_iter().next()
+                JsonNode::parse_tags(&json_tags[i..=i])?.into_iter().next()
             }
             JsonTag::LeftSquare => {
                 let right_square_i = JsonNode::find_match_tag(json_tags, i, JsonTag::LeftSquare, JsonTag::RightSquare)?;
 
                 *start = right_square_i + 1;
-                JsonNode::parse(&json_tags[i..=right_square_i])?.into_iter().next()
+                JsonNode::parse_tags(&json_tags[i..=right_square_i])?.into_iter().next()
             }
             JsonTag::LeftCurly => {
                 let right_curly_i = JsonNode::find_match_tag(json_tags, i, JsonTag::LeftCurly, JsonTag::RightCurly)?;
 
                 *start = right_curly_i + 1;
-                JsonNode::parse(&json_tags[i..=right_curly_i])?.into_iter().next()
+                JsonNode::parse_tags(&json_tags[i..=right_curly_i])?.into_iter().next()
             }
 
             _ => {
@@ -247,7 +268,7 @@ mod json_node_tests {
     fn test_one_line() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]"}}"#;
         let json_tag_list = JsonTag::parse(json.as_bytes())?;
-        let json_node_list = JsonNode::parse(&json_tag_list)?;
+        let json_node_list = JsonNode::parse_tags(&json_tag_list)?;
         assert_eq!(
             json_node_list,
             vec![
