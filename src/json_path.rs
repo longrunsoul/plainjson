@@ -490,7 +490,7 @@ impl JsonPath {
         Ok(current)
     }
 
-    pub(crate) fn json_path_get<'a>(&self, json_node: &'a mut JsonNode) -> Result<Vec<&'a JsonNode>> {
+    pub(crate) fn json_path_get_raw<'a>(&self, json_node: &'a mut JsonNode) -> Result<Vec<&'a JsonNode>> {
         let mut result = Vec::new();
         let nodes = self.evaluate_json_path(json_node)?;
         for n in nodes {
@@ -502,7 +502,7 @@ impl JsonPath {
 
     pub(crate) fn json_path_get_number(&self, json_node: &mut JsonNode) -> Result<Vec<f64>> {
         let mut numbers = Vec::new();
-        let selected = self.json_path_get(json_node)?;
+        let selected = self.json_path_get_raw(json_node)?;
         for n in selected {
             match n {
                 JsonNode::PlainNumber(num) => numbers.push(*num),
@@ -515,7 +515,7 @@ impl JsonPath {
 
     pub(crate) fn json_path_get_bool(&self, json_node: &mut JsonNode) -> Result<Vec<bool>> {
         let mut bvalues = Vec::new();
-        let selected = self.json_path_get(json_node)?;
+        let selected = self.json_path_get_raw(json_node)?;
         for n in selected {
             match n {
                 JsonNode::PlainBoolean(b) => bvalues.push(*b),
@@ -528,7 +528,7 @@ impl JsonPath {
 
     pub(crate) fn json_path_get_str(&self, json_node: &mut JsonNode) -> Result<Vec<String>> {
         let mut strs = Vec::new();
-        let selected = self.json_path_get(json_node)?;
+        let selected = self.json_path_get_raw(json_node)?;
         for n in selected {
             match n {
                 JsonNode::PlainString(s) => strs.push(s.clone()),
@@ -540,42 +540,22 @@ impl JsonPath {
     }
 
     pub(crate) fn json_path_set_null(&self, json_node: &mut JsonNode) -> Result<()> {
-        let selected = self.evaluate_json_path(json_node)?;
-        for n in selected {
-            *n = JsonNode::PlainNull;
-        }
-
-        Ok(())
+        self.json_path_set_raw(json_node, &JsonNode::PlainNull)
     }
 
     pub(crate) fn json_path_set_number(&self, json_node: &mut JsonNode, value: f64) -> Result<()> {
-        let selected = self.evaluate_json_path(json_node)?;
-        for n in selected {
-            *n = JsonNode::PlainNumber(value);
-        }
-
-        Ok(())
+        self.json_path_set_raw(json_node, &JsonNode::PlainNumber(value))
     }
 
     pub(crate) fn json_path_set_bool(&self, json_node: &mut JsonNode, value: bool) -> Result<()> {
-        let selected = self.evaluate_json_path(json_node)?;
-        for n in selected {
-            *n = JsonNode::PlainBoolean(value);
-        }
-
-        Ok(())
+        self.json_path_set_raw(json_node, &JsonNode::PlainBoolean(value))
     }
 
     pub(crate) fn json_path_set_str(&self, json_node: &mut JsonNode, value: &str) -> Result<()> {
-        let selected = self.evaluate_json_path(json_node)?;
-        for n in selected {
-            *n = JsonNode::PlainString(String::from(value));
-        }
-
-        Ok(())
+        self.json_path_set_raw(json_node, &JsonNode::PlainString(String::from(value)))
     }
 
-    pub(crate) fn json_path_set_complex(&self, json_node: &mut JsonNode, value: &JsonNode) -> Result<()> {
+    pub(crate) fn json_path_set_raw(&self, json_node: &mut JsonNode, value: &JsonNode) -> Result<()> {
         let selected = self.evaluate_json_path(json_node)?;
         for n in selected {
             *n = value.clone();
@@ -621,13 +601,43 @@ impl JsonNode {
 
     pub fn get_raw(&mut self, json_path: &str) -> Result<Option<&JsonNode>> {
         let json_path = JsonPath::parse(json_path)?;
-        let mut selected = json_path.json_path_get(self)?;
+        let mut selected = json_path.json_path_get_raw(self)?;
         if selected.is_empty() {
             return Ok(None);
         }
 
         let selected = selected.remove(0);
         Ok(Some(selected))
+    }
+
+    pub fn set_null(&mut self, json_path: &str) -> Result<()> {
+        let json_path = JsonPath::parse(json_path)?;
+        json_path.json_path_set_null(self)?;
+        Ok(())
+    }
+
+    pub fn set_number(&mut self, json_path: &str, value: f64) -> Result<()> {
+        let json_path = JsonPath::parse(json_path)?;
+        json_path.json_path_set_number(self, value)?;
+        Ok(())
+    }
+
+    pub fn set_bool(&mut self, json_path: &str, value: bool) -> Result<()> {
+        let json_path = JsonPath::parse(json_path)?;
+        json_path.json_path_set_bool(self, value)?;
+        Ok(())
+    }
+
+    pub fn set_str(&mut self, json_path: &str, value: &str) -> Result<()> {
+        let json_path = JsonPath::parse(json_path)?;
+        json_path.json_path_set_str(self, value)?;
+        Ok(())
+    }
+
+    pub fn set_raw(&mut self, json_path: &str, value: &JsonNode) -> Result<()> {
+        let json_path = JsonPath::parse(json_path)?;
+        json_path.json_path_set_raw(self, value)?;
+        Ok(())
     }
 }
 
@@ -683,7 +693,7 @@ mod json_path_tests {
 
         let json_path = r#"$.array[1]"#;
         let json_path = JsonPath::parse(json_path)?;
-        let selected = json_path.json_path_get(&mut json_node)?;
+        let selected = json_path.json_path_get_raw(&mut json_node)?;
         assert_eq!(
             selected,
             vec![
@@ -703,7 +713,7 @@ mod json_path_tests {
 
         let json_path = r#"$.object.prop"#;
         let json_path = JsonPath::parse(json_path)?;
-        let selected = json_path.json_path_get(&mut json_node)?;
+        let selected = json_path.json_path_get_raw(&mut json_node)?;
         assert_eq!(
             selected,
             vec![
@@ -723,7 +733,7 @@ mod json_path_tests {
 
         let json_path = r#"$.object.nested[-4:]"#;
         let json_path = JsonPath::parse(json_path)?;
-        let selected = json_path.json_path_get(&mut json_node)?;
+        let selected = json_path.json_path_get_raw(&mut json_node)?;
         assert_eq!(
             selected,
             vec![
@@ -746,7 +756,7 @@ mod json_path_tests {
 
         let json_path = r#"$['object']['nested'][1, 3]"#;
         let json_path = JsonPath::parse(json_path)?;
-        let selected = json_path.json_path_get(&mut json_node)?;
+        let selected = json_path.json_path_get_raw(&mut json_node)?;
         assert_eq!(
             selected,
             vec![
@@ -769,7 +779,7 @@ mod json_path_tests {
         let json_path = JsonPath::parse(json_path)?;
         json_path.json_path_set_bool(&mut json_node, true)?;
 
-        let selected = json_path.json_path_get(&mut json_node)?;
+        let selected = json_path.json_path_get_raw(&mut json_node)?;
         assert_eq!(
             selected,
             vec![
@@ -791,7 +801,7 @@ mod json_path_tests {
         let json_path = JsonPath::parse(json_path)?;
         json_path.json_path_set_str(&mut json_node, "yes")?;
 
-        let selected = json_path.json_path_get(&mut json_node)?;
+        let selected = json_path.json_path_get_raw(&mut json_node)?;
         assert_eq!(
             selected,
             vec![
@@ -813,7 +823,7 @@ mod json_path_tests {
 
         let json_path = "$.array";
         let json_path = JsonPath::parse(json_path)?;
-        json_path.json_path_set_complex(
+        json_path.json_path_set_raw(
             &mut json_node,
             &JsonNode::Object(
                 vec![
@@ -824,7 +834,7 @@ mod json_path_tests {
             )
         )?;
 
-        let selected = json_path.json_path_get(&mut json_node)?;
+        let selected = json_path.json_path_get_raw(&mut json_node)?;
         assert_eq!(
             selected,
             vec![
