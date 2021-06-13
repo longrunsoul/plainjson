@@ -1,4 +1,8 @@
 use std::{
+    fmt::{
+        self,
+        Write,
+    },
     str::FromStr,
     io::Read,
 };
@@ -8,6 +12,7 @@ use anyhow::{
 };
 
 use crate::json_tag::*;
+use std::fmt::Formatter;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct JsonObjProp {
@@ -258,6 +263,61 @@ impl JsonNode {
 
         Ok(JsonNode::Object(prop_list))
     }
+
+    fn fmt_indent(&self, f: &mut Formatter<'_>, indent_width: usize, no_plain_indent: bool) -> fmt::Result {
+        let pretty = f.alternate();
+        let ending = if pretty { "\n" } else { "" };
+        let comma_separator = if pretty { "," } else { ", " };
+        let indent_width = if pretty { indent_width } else { 0 };
+        let next_indent_width = if pretty { indent_width + 4 } else { 0 };
+        let plain_indent_width = if no_plain_indent { 0 } else { indent_width };
+        match self {
+            JsonNode::PlainNull => write!(f, "{:indent$}null", "", indent = plain_indent_width)?,
+            JsonNode::PlainBoolean(b) => write!(f, "{:indent$}{}", "", b, indent = plain_indent_width)?,
+            JsonNode::PlainNumber(n) => write!(f, "{:indent$}{}", "", n, indent = plain_indent_width)?,
+            JsonNode::PlainString(s) => write!(f, r#"{:indent$}"{}""#, "", s, indent = plain_indent_width)?,
+            JsonNode::Object(prop_list) => {
+                write!(f, "{{{}", ending)?;
+
+                for i in 0..prop_list.len() {
+                    let prop = &prop_list[i];
+
+                    write!(f, r#"{:indent$}"{}""#, "", prop.name, indent = next_indent_width)?;
+                    f.write_str(": ")?;
+
+                    prop.value.fmt_indent(f, next_indent_width, true)?;
+
+                    if i != prop_list.len() - 1 {
+                        write!(f, "{}{}", comma_separator, ending)?;
+                    }
+                }
+
+                write!(f, "{}{:indent$}}}", ending, "", indent = indent_width)?;
+            }
+            JsonNode::Array(arr) => {
+                write!(f, "[{}", ending)?;
+
+                for i in 0..arr.len() {
+                    let elem = &arr[i];
+                    elem.fmt_indent(f, next_indent_width, false)?;
+
+                    if i != arr.len() - 1 {
+                        write!(f, "{}{}", comma_separator, ending)?;
+                    }
+                }
+
+                write!(f, "{}{:indent$}]", ending, "", indent = indent_width)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl fmt::Display for JsonNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.fmt_indent(f, 0, false)
+    }
 }
 
 #[cfg(test)]
@@ -267,36 +327,71 @@ mod json_node_tests {
     #[test]
     fn test_one_line() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]"}}"#;
-        let json_tag_list = JsonTag::parse(json.as_bytes())?;
-        let json_node_list = JsonNode::parse_tags(&json_tag_list)?;
+        let json_node = JsonNode::parse_single_node(json.as_bytes())?;
         assert_eq!(
-            json_node_list,
-            vec![
-                JsonNode::Object(
-                    vec![
-                        JsonObjProp::new(String::from(r#"simple"#), JsonNode::PlainNumber(123f64)),
-                        JsonObjProp::new(
-                            String::from(r#"array"#),
-                            JsonNode::Array(
-                                vec![
-                                    JsonNode::PlainString(String::from(r#"a"#)),
-                                    JsonNode::PlainString(String::from(r#"b"#)),
-                                    JsonNode::PlainString(String::from(r#"c\""#)),
-                                ]
-                            ),
+            json_node,
+            JsonNode::Object(
+                vec![
+                    JsonObjProp::new(String::from(r#"simple"#), JsonNode::PlainNumber(123f64)),
+                    JsonObjProp::new(
+                        String::from(r#"array"#),
+                        JsonNode::Array(
+                            vec![
+                                JsonNode::PlainString(String::from(r#"a"#)),
+                                JsonNode::PlainString(String::from(r#"b"#)),
+                                JsonNode::PlainString(String::from(r#"c\""#)),
+                            ]
                         ),
-                        JsonObjProp::new(
-                            String::from(r#"object"#),
-                            JsonNode::Object(
-                                vec![
-                                    JsonObjProp::new(String::from(r#"prop"#), JsonNode::PlainString(String::from(r#"{true]"#))),
-                                ]
-                            ),
-                        )
-                    ]
-                )
-            ]
+                    ),
+                    JsonObjProp::new(
+                        String::from(r#"object"#),
+                        JsonNode::Object(
+                            vec![
+                                JsonObjProp::new(String::from(r#"prop"#), JsonNode::PlainString(String::from(r#"{true]"#))),
+                            ]
+                        ),
+                    )
+                ]
+            )
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_node_to_string() -> Result<()> {
+        let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "test": [333]}}"#;
+        let json_node = JsonNode::parse_single_node(json.as_bytes())?;
+
+        let mut to_str = String::new();
+        write!(to_str, "{}", json_node)?;
+        assert_eq!(json, &to_str);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_node_to_string_alternate() -> Result<()> {
+        let json =
+            r#"{
+    "simple": 123,
+    "array": [
+        "a",
+        "b",
+        "c\""
+    ],
+    "object": {
+        "prop": "{true]",
+        "test": [
+            333
+        ]
+    }
+}"#;
+        let json_node = JsonNode::parse_single_node(json.as_bytes())?;
+
+        let mut to_str = String::new();
+        write!(to_str, "{:#}", json_node)?;
+        assert_eq!(json, &to_str);
 
         Ok(())
     }
