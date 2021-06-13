@@ -1,3 +1,5 @@
+//! A peekable codepoints reader.
+
 use std::io::{
     Bytes,
     Read,
@@ -9,6 +11,8 @@ use anyhow::{
 };
 use unicode_reader::CodePoints;
 
+/// Codepoints reader with peeking support.
+/// Char peeking and string peeking are supported.
 pub struct PeekableCodePoints<R>
     where R: Read
 {
