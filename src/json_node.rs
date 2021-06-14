@@ -1,10 +1,7 @@
 //! JSON data type such as null, bool, number, string, array, object.
 
 use std::{
-    fmt::{
-        self,
-        Write,
-    },
+    fmt,
     str::FromStr,
     io::Read,
 };
@@ -337,7 +334,10 @@ impl fmt::Display for JsonNode {
 
 #[cfg(test)]
 mod json_node_tests {
-    use super::*;
+    use std::fmt::Write;
+    use anyhow::Result;
+    use super::JsonNode;
+    use super::JsonObjProp;
 
     /// Test JSON node parsing using a single-line JSON string.
     #[test]

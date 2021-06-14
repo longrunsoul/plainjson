@@ -305,7 +305,7 @@ impl JsonPathPart {
         where R: Read {
         let path_name;
         let mut elem_selector = None;
-        let mut filter = None;
+        let /*mut*/ filter = None;
 
         let frag_type = PartFragType::identify_frag(peekable_cp)?;
         match frag_type {
@@ -704,7 +704,6 @@ impl JsonNode {
 #[cfg(test)]
 mod json_path_tests {
     use super::*;
-    use crate::json_tag::*;
 
     /// Test dot-notation-type JSONPath(without filter) parsing.
     #[test]
