@@ -1,3 +1,5 @@
+//! JSONPath implementation except filter expression(currently filter part of JSONPath not implemented yet).
+
 use std::{
     io::Read,
     str::FromStr,
@@ -11,6 +13,15 @@ use crate::peekable_codepoints::*;
 use crate::filter_expression::*;
 use crate::json_node::*;
 
+/// JSONPath part fragment types.<br>
+/// There are mainly 3 types of JSONPath part fragment: path name, array element selector, filter.<br>
+/// For example, in below JSONPath instance:<br>
+/// ```text
+/// $.store[3].book[?(@.price < 10)]
+/// ```
+/// "$", "store", "book" are path names.<br>
+/// "\[3\]" is an array element selector.<br>
+/// "\[?(@.price < 10)\]" is a filter.
 #[derive(Debug, PartialEq)]
 pub enum PartFragType {
     None,
@@ -23,6 +34,7 @@ pub enum PartFragType {
 }
 
 impl PartFragType {
+    /// Identify fragment type of following JSONPath part from a PeekableCodePoints instance.
     pub(crate) fn identify_frag<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Self>
         where R: Read {
         let frag_type =
@@ -55,6 +67,11 @@ impl PartFragType {
     }
 }
 
+/// Array element selector. There are 4 types of array element selector:
+/// - All: selects all elements of array
+/// - Single: select 1 single element of array
+/// - Range: selects a range of elements of array
+/// - Multiple: selects several distinct elements of array
 #[derive(Debug, PartialEq)]
 pub enum ArrayElementSelector {
     All,
@@ -64,6 +81,7 @@ pub enum ArrayElementSelector {
 }
 
 impl ArrayElementSelector {
+    /// Trim square brackets from both sides of a string if any.
     fn trim_brackets(elem_selector_str: String) -> String {
         let inner_str =
             if elem_selector_str.starts_with("[") && elem_selector_str.ends_with("]") {
@@ -74,6 +92,7 @@ impl ArrayElementSelector {
         inner_str
     }
 
+    /// Parse single-type or all-type array element selector from a string.
     fn parse_single_or_all(elem_selector_str: String) -> Result<Self> {
         let index_str = ArrayElementSelector::trim_brackets(elem_selector_str);
         if index_str == "*" {
@@ -84,6 +103,7 @@ impl ArrayElementSelector {
         Ok(ArrayElementSelector::Single(index))
     }
 
+    /// Parse range-type array element selector from a string.
     fn parse_range(elem_selector_str: String) -> Result<Self> {
         let range_str = ArrayElementSelector::trim_brackets(elem_selector_str);
         let colon_index = range_str.chars().position(|c| c == ':').unwrap();
@@ -105,6 +125,7 @@ impl ArrayElementSelector {
         Ok(ArrayElementSelector::Range(range_left, range_right))
     }
 
+    /// Parse multiple-type array element selector from a string.
     fn parse_multiple(elem_selector_str: String) -> Result<Self> {
         let mut indexes = Vec::new();
 
@@ -130,6 +151,7 @@ impl ArrayElementSelector {
         Ok(ArrayElementSelector::Multiple(indexes))
     }
 
+    /// Parse an array element selector from an instance of PeekableCodePoints.
     pub(crate) fn parse<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Self>
         where R: Read {
         let mut i = 0;
@@ -170,6 +192,15 @@ impl ArrayElementSelector {
     }
 }
 
+/// JSONPath part, composed of 3 parts: a path name, an array element selector, and a filter.<br>
+/// For example, in below JSONPath:
+/// ```text
+/// $.store[3].book[?(@.price < 10)]
+/// ```
+/// ```$```, ```store[3]```, ```book[?(@.price < 10)]``` are 3 JSONPath parts.<br>
+/// ```$``` is a JSONPath part composed of only a path name ```$```.<br>
+/// ```store[3]``` is a JSONPath part composed of a path name ```store``` and an array element selector ```[3]```.<br>
+/// ```book[?(@.price < 10)]``` is a JSONPath part composed of a path name ```book``` and a filter ```[?(@.price < 10)]```.
 #[derive(Debug, PartialEq)]
 pub struct JsonPathPart {
     pub path_name: String,
@@ -178,6 +209,7 @@ pub struct JsonPathPart {
 }
 
 impl JsonPathPart {
+    /// Create a JSONPath part from a path name, an optional array element selector, and an optional filter expression.
     fn new(path_name: &str, elem_selector: Option<ArrayElementSelector>, filter: Option<FilterExpression>) -> Self {
         JsonPathPart {
             path_name: String::from(path_name),
@@ -186,6 +218,7 @@ impl JsonPathPart {
         }
     }
 
+    /// Parse dot notation type path name from an instance of PeekableCodePoints.
     pub(crate) fn parse_dot_notation_path_name<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<String>
         where R: Read {
         let mut i = 0;
@@ -218,6 +251,7 @@ impl JsonPathPart {
         Ok(path_name)
     }
 
+    /// Parse bracket notation type path name from an instance of PeekableCodePoints.
     pub(crate) fn parse_bracket_notation_path_name<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<String>
         where R: Read {
         let mut i = 0;
@@ -265,6 +299,8 @@ impl JsonPathPart {
         Ok(path_name_w_bracket)
     }
 
+    /// Parse 1 JSONPath part from an instance of PeekableCodePoints.
+    /// Note: filter parsing is not implemented yet.
     pub(crate) fn parse_next<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<Self>>
         where R: Read {
         let path_name;
@@ -306,6 +342,7 @@ impl JsonPathPart {
     }
 }
 
+/// Get selected elements out of a mut vector reference as mut reference by indexes.
 fn get_mut_by_indexes<'a, T>(vec: &'a mut Vec<T>, indexes: &Vec<usize>) -> Vec<&'a mut T> {
     let mut results = Vec::new();
 
@@ -328,6 +365,7 @@ fn get_mut_by_indexes<'a, T>(vec: &'a mut Vec<T>, indexes: &Vec<usize>) -> Vec<&
     results
 }
 
+/// Get selected elements out of a mut vector reference as mut reference by index range.
 fn get_mut_by_index_range<T>(vec: &mut Vec<T>, start: usize, end: usize) -> Vec<&mut T> {
     let mut results = Vec::new();
 
@@ -355,18 +393,21 @@ fn get_mut_by_index_range<T>(vec: &mut Vec<T>, start: usize, end: usize) -> Vec<
     results
 }
 
+/// JSONPath, composed of JSONPath parts.
 #[derive(Debug, PartialEq)]
 pub struct JsonPath {
     pub parts: Vec<JsonPathPart>,
 }
 
 impl JsonPath {
+    /// Create JsonPath from a list of JSONPath parts.
     fn new(parts: Vec<JsonPathPart>) -> Self {
         JsonPath {
             parts
         }
     }
 
+    /// Parse JsonPath from a string representation of it.
     pub fn parse(path_str: &str) -> Result<Self> {
         let mut path_parts = Vec::new();
         let mut peekable_cp = PeekableCodePoints::new(path_str.as_bytes());
@@ -387,6 +428,7 @@ impl JsonPath {
         Ok(json_path)
     }
 
+    /// Evaluate JSONPath to a list of mutable JsonNode.
     fn evaluate_json_path<'a>(&self, json_node: &'a mut JsonNode) -> Result<Vec<&'a mut JsonNode>> {
         let mut current = vec![json_node];
         for path_part in &self.parts {
@@ -490,6 +532,7 @@ impl JsonPath {
         Ok(current)
     }
 
+    /// Get a list of raw JsonNode by a JsonPath.
     pub(crate) fn json_path_get_raw<'a>(&self, json_node: &'a mut JsonNode) -> Result<Vec<&'a JsonNode>> {
         let mut result = Vec::new();
         let nodes = self.evaluate_json_path(json_node)?;
@@ -500,6 +543,7 @@ impl JsonPath {
         Ok(result)
     }
 
+    /// Get a list of number value by a JsonPath. The nodes selected by JsonPath must be of number type.
     pub(crate) fn json_path_get_number(&self, json_node: &mut JsonNode) -> Result<Vec<f64>> {
         let mut numbers = Vec::new();
         let selected = self.json_path_get_raw(json_node)?;
@@ -513,6 +557,7 @@ impl JsonPath {
         Ok(numbers)
     }
 
+    /// Get a list of bool value by a JsonPath. The nodes selected by JsonPath must be of bool type.
     pub(crate) fn json_path_get_bool(&self, json_node: &mut JsonNode) -> Result<Vec<bool>> {
         let mut bvalues = Vec::new();
         let selected = self.json_path_get_raw(json_node)?;
@@ -526,6 +571,7 @@ impl JsonPath {
         Ok(bvalues)
     }
 
+    /// Get a list of string value by a JsonPath. The nodes selected by JsonPath must be of string type.
     pub(crate) fn json_path_get_str(&self, json_node: &mut JsonNode) -> Result<Vec<String>> {
         let mut strs = Vec::new();
         let selected = self.json_path_get_raw(json_node)?;
@@ -539,22 +585,27 @@ impl JsonPath {
         Ok(strs)
     }
 
+    /// Set the nodes selected by JsonPath to null value.
     pub(crate) fn json_path_set_null(&self, json_node: &mut JsonNode) -> Result<()> {
         self.json_path_set_raw(json_node, &JsonNode::PlainNull)
     }
 
+    /// Set the nodes selected by JsonPath to a value of specified number.
     pub(crate) fn json_path_set_number(&self, json_node: &mut JsonNode, value: f64) -> Result<()> {
         self.json_path_set_raw(json_node, &JsonNode::PlainNumber(value))
     }
 
+    /// Set the nodes selected by JsonPath to a value of specified bool.
     pub(crate) fn json_path_set_bool(&self, json_node: &mut JsonNode, value: bool) -> Result<()> {
         self.json_path_set_raw(json_node, &JsonNode::PlainBoolean(value))
     }
 
+    /// Set the nodes selected by JsonPath to a value of specified string.
     pub(crate) fn json_path_set_str(&self, json_node: &mut JsonNode, value: &str) -> Result<()> {
         self.json_path_set_raw(json_node, &JsonNode::PlainString(String::from(value)))
     }
 
+    /// Set the nodes selected by JsonPath to a value of specified raw JsonNode.
     pub(crate) fn json_path_set_raw(&self, json_node: &mut JsonNode, value: &JsonNode) -> Result<()> {
         let selected = self.evaluate_json_path(json_node)?;
         for n in selected {
@@ -566,6 +617,7 @@ impl JsonPath {
 }
 
 impl JsonNode {
+    /// Get a number value of the node selected by specified JSONPath.
     pub fn get_number(&mut self, json_path: &str) -> Result<Option<f64>> {
         let json_path = JsonPath::parse(json_path)?;
         let mut selected = json_path.json_path_get_number(self)?;
@@ -577,6 +629,7 @@ impl JsonNode {
         Ok(Some(selected))
     }
 
+    /// Get a bool value of the node selected by specified JSONPath.
     pub fn get_bool(&mut self, json_path: &str) -> Result<Option<bool>> {
         let json_path = JsonPath::parse(json_path)?;
         let mut selected = json_path.json_path_get_bool( self)?;
@@ -588,6 +641,7 @@ impl JsonNode {
         Ok(Some(selected))
     }
 
+    /// Get a string value of the node selected by specified JSONPath.
     pub fn get_str(&mut self, json_path: &str) -> Result<Option<String>> {
         let json_path = JsonPath::parse(json_path)?;
         let mut selected = json_path.json_path_get_str(self)?;
@@ -599,6 +653,7 @@ impl JsonNode {
         Ok(Some(selected))
     }
 
+    /// Get the raw JsonNode of the node selected by specified JSONPath.
     pub fn get_raw(&mut self, json_path: &str) -> Result<Option<&JsonNode>> {
         let json_path = JsonPath::parse(json_path)?;
         let mut selected = json_path.json_path_get_raw(self)?;
@@ -610,30 +665,35 @@ impl JsonNode {
         Ok(Some(selected))
     }
 
+    /// Set the value of nodes selected by specified JSONPath to null.
     pub fn set_null(&mut self, json_path: &str) -> Result<()> {
         let json_path = JsonPath::parse(json_path)?;
         json_path.json_path_set_null(self)?;
         Ok(())
     }
 
+    /// Set the value of nodes selected by specified JSONPath to specified number.
     pub fn set_number(&mut self, json_path: &str, value: f64) -> Result<()> {
         let json_path = JsonPath::parse(json_path)?;
         json_path.json_path_set_number(self, value)?;
         Ok(())
     }
 
+    /// Set the value of nodes selected by specified JSONPath to specified bool.
     pub fn set_bool(&mut self, json_path: &str, value: bool) -> Result<()> {
         let json_path = JsonPath::parse(json_path)?;
         json_path.json_path_set_bool(self, value)?;
         Ok(())
     }
 
+    /// Set the value of nodes selected by specified JSONPath to specified string.
     pub fn set_str(&mut self, json_path: &str, value: &str) -> Result<()> {
         let json_path = JsonPath::parse(json_path)?;
         json_path.json_path_set_str(self, value)?;
         Ok(())
     }
 
+    /// Set the value of nodes selected by specified JSONPath to specified raw JsonNode.
     pub fn set_raw(&mut self, json_path: &str, value: &JsonNode) -> Result<()> {
         let json_path = JsonPath::parse(json_path)?;
         json_path.json_path_set_raw(self, value)?;
@@ -646,6 +706,7 @@ mod json_path_tests {
     use super::*;
     use crate::json_tag::*;
 
+    /// Test dot-notation-type JSONPath(without filter) parsing.
     #[test]
     fn test_no_filter_dot_notation() -> Result<()> {
         let json_path_str = r#"$[-1:].store[:3].bicycle[0, 13].color[*]"#;
@@ -665,6 +726,7 @@ mod json_path_tests {
         Ok(())
     }
 
+    /// Test bracket-notation-type JSONPath(without filter) parsing.
     #[test]
     fn test_no_filter_bracket_notation() -> Result<()> {
         let json_path_str = r#"$[-1:]['store'][:3]['bicycle'][0, 13]['color'][*]"#;
@@ -684,6 +746,7 @@ mod json_path_tests {
         Ok(())
     }
 
+    /// Test JSONPath evaluation of array elements.
     #[test]
     fn test_json_path_get_array() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]"}}"#;
@@ -702,6 +765,7 @@ mod json_path_tests {
         Ok(())
     }
 
+    /// Test JSONPath evaluation of object property value.
     #[test]
     fn test_json_path_get_object() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]"}}"#;
@@ -720,6 +784,7 @@ mod json_path_tests {
         Ok(())
     }
 
+    /// Test JSONPath evaluation, a little complex one.
     #[test]
     fn test_json_path_get_complex() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
@@ -741,6 +806,7 @@ mod json_path_tests {
         Ok(())
     }
 
+    /// Test bracket-notation-type JSONPath evaluation.
     #[test]
     fn test_json_path_get_bracket_notation() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
@@ -760,6 +826,7 @@ mod json_path_tests {
         Ok(())
     }
 
+    /// Test value assignment by JSONPath, the simple one.
     #[test]
     fn test_json_path_set_simple() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
@@ -780,6 +847,7 @@ mod json_path_tests {
         Ok(())
     }
 
+    /// Test value assignment by JSONPath, the array.
     #[test]
     fn test_json_path_set_simple_array() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
@@ -802,6 +870,7 @@ mod json_path_tests {
         Ok(())
     }
 
+    /// Test value assignment by JSONPath, a little complex one.
     #[test]
     fn test_json_path_set_complex() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "nested": [true, false, 3, "yes", "no"]}}"#;
