@@ -1,3 +1,5 @@
+//! Low-level JSON fragments such as brackets({, }, [, ]), colon(:), comma(,), and literal(bool, number, string, null).
+
 use std::io::{
     Read,
 };
@@ -7,6 +9,7 @@ use anyhow::{
 
 use crate::peekable_codepoints::*;
 
+/// Low-level JSON fragments
 #[derive(Debug, Eq, PartialEq)]
 pub enum JsonTag {
     LeftCurly,
@@ -19,6 +22,7 @@ pub enum JsonTag {
 }
 
 impl JsonTag {
+    /// Convert JSON tags to string representation.
     pub fn to_string(json_tags: &[JsonTag]) -> String {
         let mut result = String::new();
         for i in 0..json_tags.len() {
@@ -36,6 +40,8 @@ impl JsonTag {
         result
     }
 
+    /// Read one single JSON tag from codepoint reader.
+    /// If end-of-input found, return None.
     fn read_json_tag<R>(peekable_cp: &mut PeekableCodePoints<R>) -> Result<Option<JsonTag>>
         where R: Read
     {
@@ -129,6 +135,7 @@ impl JsonTag {
         Ok(json_tag)
     }
 
+    /// Parse JSON tags from a instance that implements Read trait.
     pub fn parse<R>(reader: R) -> Result<Vec<JsonTag>>
         where R: Read
     {
@@ -151,6 +158,7 @@ impl JsonTag {
 mod json_tag_tests {
     use super::*;
 
+    /// Test JSON tag parsing using a single line of JSON string.
     #[test]
     fn test_one_line() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]"}}"#;
@@ -191,6 +199,7 @@ mod json_tag_tests {
         Ok(())
     }
 
+    /// Test JSON tag parsing using multiple-line JSON string.
     #[test]
     fn test_multi_line() -> Result<()> {
         let json = r#"
@@ -242,6 +251,7 @@ mod json_tag_tests {
         Ok(())
     }
 
+    /// Test JSON tag parsing using multiple-line JSON string which has a malformed notation.
     #[test]
     fn test_multi_line_malformed() -> Result<()> {
         let json = r#"
