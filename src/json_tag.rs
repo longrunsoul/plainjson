@@ -1,4 +1,4 @@
-//! Low-level JSON fragments such as brackets({, }, [, ]), colon(:), comma(,), and literal(bool, number, string, null).
+//! Low-level JSON fragments such as brackets({, }, \[, \]), colon(:), comma(,), and literal(bool, number, string, null).
 
 use std::io::{
     Read,
