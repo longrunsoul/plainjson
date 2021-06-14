@@ -1,3 +1,5 @@
+//! JSON data type such as null, bool, number, string, array, object.
+
 use std::{
     fmt::{
         self,
@@ -14,6 +16,7 @@ use anyhow::{
 use crate::json_tag::*;
 use std::fmt::Formatter;
 
+/// JSON object property
 #[derive(Debug, PartialEq, Clone)]
 pub struct JsonObjProp {
     pub name: String,
@@ -21,6 +24,7 @@ pub struct JsonObjProp {
 }
 
 impl JsonObjProp {
+    /// Create JSON object property from name and value.
     pub fn new(name: String, value: JsonNode) -> Self {
         JsonObjProp {
             name,
@@ -29,6 +33,7 @@ impl JsonObjProp {
     }
 }
 
+/// JSON data type
 #[derive(Debug, PartialEq, Clone)]
 pub enum JsonNode {
     PlainNull,
@@ -40,6 +45,7 @@ pub enum JsonNode {
 }
 
 impl JsonNode {
+    /// Parse a single JSON node from a instance that implements Reader trait.
     pub fn parse_single_node<R>(reader: R) -> Result<JsonNode>
         where R: Read {
         let mut nodes = JsonNode::parse(reader)?;
@@ -51,6 +57,7 @@ impl JsonNode {
         Ok(n)
     }
 
+    /// Parse JSON nodes from a instance that implements Reader trait.
     pub fn parse<R>(reader: R) -> Result<Vec<JsonNode>>
         where R: Read {
         let tags = JsonTag::parse(reader)?;
@@ -58,6 +65,7 @@ impl JsonNode {
         Ok(nodes)
     }
 
+    /// Parse JSON nodes from a JSON tag slice.
     pub fn parse_tags(json_tags: &[JsonTag]) -> Result<Vec<JsonNode>> {
         let mut i = 0;
         let mut json_nodes = Vec::new();
@@ -101,6 +109,7 @@ impl JsonNode {
         Ok(json_nodes)
     }
 
+    /// Parse a single JSON node from a JSON tag slice, starts at specified index.
     fn parse_next(json_tags: &[JsonTag], start: &mut usize) -> Result<Option<JsonNode>> {
         let i = *start;
         let node = match &json_tags[i] {
@@ -130,6 +139,7 @@ impl JsonNode {
         Ok(node)
     }
 
+    /// Find the index of matching tag from a JSON tag slice, start at specified index.
     fn find_match_tag(json_tags: &[JsonTag], start: usize, left_pair_tag: JsonTag, right_pair_tag: JsonTag) -> Result<usize> {
         let mut i = start + 1;
         let mut mismatch = 0;
@@ -150,6 +160,7 @@ impl JsonNode {
         Ok(i)
     }
 
+    /// Parse a plain data type JSON node(null, bool, number, or string) from a literal string.
     fn parse_plain(literal: &str) -> Result<JsonNode> {
         let plain_node =
             match literal {
@@ -177,6 +188,7 @@ impl JsonNode {
         Ok(plain_node)
     }
 
+    /// Parse a array data type from a JSON tag slice.
     fn parse_array(json_tags: &[JsonTag]) -> Result<JsonNode> {
         let inner_tags =
             if json_tags.first() == Some(&JsonTag::LeftSquare) && json_tags.last() == Some(&JsonTag::RightSquare) {
@@ -207,6 +219,7 @@ impl JsonNode {
         Ok(array_node)
     }
 
+    /// Parse a object data type from a JSON tag slice.
     fn parse_object(json_tags: &[JsonTag]) -> Result<JsonNode> {
         let inner_tags =
             if json_tags.first() == Some(&JsonTag::LeftCurly) && json_tags.last() == Some(&JsonTag::RightCurly) {
@@ -264,6 +277,7 @@ impl JsonNode {
         Ok(JsonNode::Object(prop_list))
     }
 
+    /// Compose a formatted JSON string representation of a JSON node.
     fn fmt_indent(&self, f: &mut Formatter<'_>, indent_width: usize, no_plain_indent: bool) -> fmt::Result {
         let pretty = f.alternate();
         let ending = if pretty { "\n" } else { "" };
@@ -315,6 +329,7 @@ impl JsonNode {
 }
 
 impl fmt::Display for JsonNode {
+    /// Implement Display trait for JsonNode
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.fmt_indent(f, 0, false)
     }
@@ -324,6 +339,7 @@ impl fmt::Display for JsonNode {
 mod json_node_tests {
     use super::*;
 
+    /// Test JSON node parsing using a single-line JSON string.
     #[test]
     fn test_one_line() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]"}}"#;
@@ -358,6 +374,7 @@ mod json_node_tests {
         Ok(())
     }
 
+    /// Test JsonNode Display trait implementation.
     #[test]
     fn test_node_to_string() -> Result<()> {
         let json = r#"{"simple": 123, "array": ["a", "b", "c\""], "object": {"prop": "{true]", "test": [333]}}"#;
@@ -370,6 +387,7 @@ mod json_node_tests {
         Ok(())
     }
 
+    /// Test JsonNode Display trait implementation with alternate formatter option.
     #[test]
     fn test_node_to_string_alternate() -> Result<()> {
         let json =
