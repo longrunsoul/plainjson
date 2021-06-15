@@ -10,8 +10,8 @@ use anyhow::{
 };
 
 use crate::peekable_codepoints::*;
-use crate::filter_expression::*;
 use crate::json_node::*;
+// use crate::filter_expression::*;
 
 /// JSONPath part fragment types.<br>
 /// There are mainly 3 types of JSONPath part fragment: path name, array element selector, filter.<br>
@@ -205,16 +205,16 @@ impl ArrayElementSelector {
 pub struct JsonPathPart {
     pub path_name: String,
     pub elem_selector: Option<ArrayElementSelector>,
-    pub filter: Option<FilterExpression>,
+    // pub filter: Option<FilterExpression>,
 }
 
 impl JsonPathPart {
     /// Create a JSONPath part from a path name, an optional array element selector, and an optional filter expression.
-    fn new(path_name: &str, elem_selector: Option<ArrayElementSelector>, filter: Option<FilterExpression>) -> Self {
+    fn new(path_name: &str, elem_selector: Option<ArrayElementSelector>/*, filter: Option<FilterExpression>*/) -> Self {
         JsonPathPart {
             path_name: String::from(path_name),
             elem_selector,
-            filter,
+            // filter,
         }
     }
 
@@ -305,7 +305,7 @@ impl JsonPathPart {
         where R: Read {
         let path_name;
         let mut elem_selector = None;
-        let /*mut*/ filter = None;
+        // let mut filter = None;
 
         let frag_type = PartFragType::identify_frag(peekable_cp)?;
         match frag_type {
@@ -337,7 +337,7 @@ impl JsonPathPart {
             _ => (),
         }
 
-        let part = JsonPathPart::new(&path_name, elem_selector, filter);
+        let part = JsonPathPart::new(&path_name, elem_selector/*, filter*/);
         Ok(Some(part))
     }
 }
@@ -714,10 +714,10 @@ mod json_path_tests {
             json_path,
             JsonPath::new(
                 vec![
-                    JsonPathPart::new("$", Some(ArrayElementSelector::Range(Some(-1), None)), None),
-                    JsonPathPart::new("store", Some(ArrayElementSelector::Range(None, Some(3))), None),
-                    JsonPathPart::new("bicycle", Some(ArrayElementSelector::Multiple(vec![0, 13])), None),
-                    JsonPathPart::new("color", Some(ArrayElementSelector::All), None),
+                    JsonPathPart::new("$", Some(ArrayElementSelector::Range(Some(-1), None))/*, None*/),
+                    JsonPathPart::new("store", Some(ArrayElementSelector::Range(None, Some(3)))/*, None*/),
+                    JsonPathPart::new("bicycle", Some(ArrayElementSelector::Multiple(vec![0, 13]))/*, None*/),
+                    JsonPathPart::new("color", Some(ArrayElementSelector::All)/*, None*/),
                 ]
             )
         );
@@ -734,10 +734,10 @@ mod json_path_tests {
             json_path,
             JsonPath::new(
                 vec![
-                    JsonPathPart::new("$", Some(ArrayElementSelector::Range(Some(-1), None)), None),
-                    JsonPathPart::new("store", Some(ArrayElementSelector::Range(None, Some(3))), None),
-                    JsonPathPart::new("bicycle", Some(ArrayElementSelector::Multiple(vec![0, 13])), None),
-                    JsonPathPart::new("color", Some(ArrayElementSelector::All), None),
+                    JsonPathPart::new("$", Some(ArrayElementSelector::Range(Some(-1), None))/*, None*/),
+                    JsonPathPart::new("store", Some(ArrayElementSelector::Range(None, Some(3)))/*, None*/),
+                    JsonPathPart::new("bicycle", Some(ArrayElementSelector::Multiple(vec![0, 13]))/*, None*/),
+                    JsonPathPart::new("color", Some(ArrayElementSelector::All)/*, None*/),
                 ]
             )
         );
