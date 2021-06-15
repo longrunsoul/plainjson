@@ -2,7 +2,7 @@
 //! - JsonTag: A low-level JSON tag parser which reads JSON tags from an instance which implements trait std::io::Read
 //! - JsonNode: A JSON parser which supports getting or setting value from/to selected JSON nodes by JSONPath
 //!
-//! Note: Filter of JSONPath is not implemented yet, so currently filter expression is not supported.
+//! Note: Filter expression in JSONPath is not implemented yet, so currently filter expression is not supported.
 //!
 //! Getting value by JSONPath is like:
 //! ```
