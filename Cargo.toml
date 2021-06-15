@@ -1,8 +1,10 @@
 [package]
 name = "plainjson"
-version = "0.1.0"
+version = "0.1.1"
 description = "A library simply provides low-level access and JSONPath way to query or set JSON values."
 authors = ["longrunsoul <longrunsoul@outlook.com>"]
+repository = "https://github.com/longrunsoul/plainjson"
+documentation = "https://docs.rs/plainjson"
 license = "MIT"
 edition = "2018"
 
