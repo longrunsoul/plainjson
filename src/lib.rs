@@ -44,11 +44,11 @@
 //!
 //! This library is licensed under <a href="LICENSE">MIT license</a>.
 
-mod peekable_codepoints;
-mod json_tag;
+mod filter_expression;
 mod json_node;
 mod json_path;
-mod filter_expression;
+mod json_tag;
+mod peekable_codepoints;
 
-pub use crate::json_tag::JsonTag;
 pub use crate::json_node::JsonNode;
+pub use crate::json_tag::JsonTag;

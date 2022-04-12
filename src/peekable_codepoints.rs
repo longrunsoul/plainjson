@@ -1,20 +1,15 @@
 //! A peekable codepoint reader.
 
-use std::io::{
-    Bytes,
-    Read,
-};
+use std::io::{Bytes, Read};
 
-use anyhow::{
-    Result,
-    Error,
-};
+use anyhow::{Error, Result};
 use unicode_reader::CodePoints;
 
 /// A codepoint reader supports peeking.
 /// Peek/pop char/string from internal char reader.
 pub struct PeekableCodePoints<R>
-    where R: Read
+where
+    R: Read,
 {
     /// internal char reader
     codepoints: CodePoints<Bytes<R>>,
@@ -63,12 +58,11 @@ impl<R: Read> PeekableCodePoints<R> {
     /// Drop count number of chars from internal buffer.
     /// If not enough chars in buffer, drop actual number remaining.
     fn discard_buffer(&mut self, count: usize) {
-        let actual_count =
-            if count > self.buffer.len() {
-                self.buffer.len()
-            } else {
-                count
-            };
+        let actual_count = if count > self.buffer.len() {
+            self.buffer.len()
+        } else {
+            count
+        };
 
         self.buffer.drain(0..actual_count);
     }
