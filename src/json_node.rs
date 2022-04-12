@@ -172,8 +172,8 @@ impl JsonNode {
 
                 _ => {
                     if (
-                        (literal.chars().nth(0) == Some('\'') && literal.chars().last() == Some('\''))
-                            || (literal.chars().nth(0) == Some('"') && literal.chars().last() == Some('"'))
+                        (literal.starts_with('\'') && literal.ends_with('\''))
+                            || (literal.starts_with('"') && literal.ends_with('"'))
                     ) && literal.len() > 1 {
                         JsonNode::PlainString(String::from(&literal[1..literal.len() - 1]))
                     } else {
@@ -230,8 +230,8 @@ impl JsonNode {
         while i < inner_tags.len() {
             let prop_name =
                 if let JsonTag::Literal(str) = &inner_tags[i] {
-                    if (str.chars().nth(0) == Some('\'') && str.chars().last() == Some('\''))
-                        || (str.chars().nth(0) == Some('"') && str.chars().last() == Some('"')) {
+                    if (str.starts_with('\'') && str.ends_with('\''))
+                        || (str.starts_with('"') && str.ends_with('"')) {
                         &str[1..str.len() - 1]
                     } else {
                         str

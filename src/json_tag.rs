@@ -25,8 +25,8 @@ impl JsonTag {
     /// Convert JSON tags to string representation.
     pub fn to_string(json_tags: &[JsonTag]) -> String {
         let mut result = String::new();
-        for i in 0..json_tags.len() {
-            match &json_tags[i] {
+        for tag in json_tags {
+            match tag {
                 JsonTag::LeftCurly => result.push('{'),
                 JsonTag::RightCurly => result.push('}'),
                 JsonTag::LeftSquare => result.push('['),
@@ -89,7 +89,7 @@ impl JsonTag {
                                                     continue;
                                                 }
 
-                                                '\r' | '\n' if !quote.is_none() => {
+                                                '\r' | '\n' if quote.is_some() => {
                                                     quote_as_literal = true;
 
                                                     quote = None;

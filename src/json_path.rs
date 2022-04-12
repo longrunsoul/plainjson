@@ -84,7 +84,7 @@ impl ArrayElementSelector {
     /// Trim square brackets from both sides of a string if any.
     fn trim_brackets(elem_selector_str: String) -> String {
         let inner_str =
-            if elem_selector_str.starts_with("[") && elem_selector_str.ends_with("]") {
+            if elem_selector_str.starts_with('[') && elem_selector_str.ends_with(']') {
                 elem_selector_str.chars().skip(1).take(elem_selector_str.chars().count() - 2).collect()
             } else {
                 elem_selector_str
@@ -270,7 +270,7 @@ impl JsonPathPart {
                         }
                         '\'' if !is_escape => {
                             in_quote = !in_quote;
-                            if false == in_quote {
+                            if !in_quote {
                                 match peekable_cp.peek_char(i + 1)? {
                                     None => bail!("unexpected end: {}", peekable_cp.peek(i + 1)?),
                                     Some(c) => {
@@ -332,9 +332,8 @@ impl JsonPathPart {
         }
 
         let last_frag_type = PartFragType::identify_frag(peekable_cp)?;
-        match last_frag_type {
-            PartFragType::Filter => {}
-            _ => (),
+        if last_frag_type == PartFragType::Filter {
+            todo!("implement json path filter");
         }
 
         let part = JsonPathPart::new(&path_name, elem_selector/*, filter*/);
@@ -343,7 +342,7 @@ impl JsonPathPart {
 }
 
 /// Get selected elements out of a mut vector reference as mut reference by indexes.
-fn get_mut_by_indexes<'a, T>(vec: &'a mut Vec<T>, indexes: &Vec<usize>) -> Vec<&'a mut T> {
+fn get_mut_by_indexes<'a, T>(vec: &'a mut [T], indexes: &[usize]) -> Vec<&'a mut T> {
     let mut results = Vec::new();
 
     let mut i = 0;
@@ -366,7 +365,7 @@ fn get_mut_by_indexes<'a, T>(vec: &'a mut Vec<T>, indexes: &Vec<usize>) -> Vec<&
 }
 
 /// Get selected elements out of a mut vector reference as mut reference by index range.
-fn get_mut_by_index_range<T>(vec: &mut Vec<T>, start: usize, end: usize) -> Vec<&mut T> {
+fn get_mut_by_index_range<T>(vec: &mut [T], start: usize, end: usize) -> Vec<&mut T> {
     let mut results = Vec::new();
 
     let mut i = 0;
@@ -438,19 +437,15 @@ impl JsonPath {
                 pn => {
                     let mut next = Vec::new();
                     for c in current {
-                        match c {
-                            JsonNode::Object(pl) => {
-                                let prop_index = pl.iter().position(|x| x.name == pn);
+                        // only handle object notation
+                        if let JsonNode::Object(pl) = c {
+                            let prop_index = pl.iter().position(|x| x.name == pn);
 
-                                // ignore if not found
-                                if !prop_index.is_none() {
-                                    let n = &mut pl[prop_index.unwrap()].value;
-                                    next.push(n);
-                                }
+                            // ignore if not found
+                            if let Some(prop_index) = prop_index {
+                                let n = &mut pl[prop_index].value;
+                                next.push(n);
                             }
-
-                            // ignore when applied on non-object notation
-                            _ => (),
                         }
                     }
 
@@ -465,9 +460,10 @@ impl JsonPath {
                     for c in current {
                         match c {
                             JsonNode::Array(arr) => {
+                                let arr_len = arr.len();
                                 match es {
                                     ArrayElementSelector::Single(i) => {
-                                        if *i < arr.len() {
+                                        if *i < arr_len {
                                             next.push(&mut arr[*i]);
                                         }
                                     }
@@ -491,7 +487,7 @@ impl JsonPath {
                                             Some(s) if *s < 0 => {
                                                 match e {
                                                     None => {
-                                                        let mut selected = get_mut_by_index_range(arr, ((arr.len() as i32) + *s) as usize, arr.len());
+                                                        let mut selected = get_mut_by_index_range(arr, ((arr_len as i32) + *s) as usize, arr_len);
                                                         next.append(&mut selected);
                                                     }
                                                     Some(e) => bail!("array element selector start index must not be negative when end index specified: [{}:{}]", s, e),
@@ -500,7 +496,7 @@ impl JsonPath {
                                             Some(s) if *s >= 0 => {
                                                 match e {
                                                     None => {
-                                                        let mut selected = get_mut_by_index_range(arr, *s as usize, arr.len());
+                                                        let mut selected = get_mut_by_index_range(arr, *s as usize, arr_len);
                                                         next.append(&mut selected);
                                                     }
                                                     Some(e) if *e < 0 => bail!("array element selector end index must not be negative: [{}:{}]", s, e),
@@ -515,7 +511,7 @@ impl JsonPath {
                                         }
                                     }
                                     ArrayElementSelector::All => {
-                                        let mut selected = get_mut_by_index_range(arr, 0, arr.len());
+                                        let mut selected = get_mut_by_index_range(arr, 0, arr_len);
                                         next.append(&mut selected);
                                     }
                                 }
