@@ -41,8 +41,6 @@
 //!     assert_eq!(JsonTag::to_string(&tags), r#"{"a": "test", "b": "world"}"#);
 //! }
 //! ```
-//!
-//! This library is licensed under <a href="LICENSE">MIT license</a>.
 
 mod filter_expression;
 mod json_node;
